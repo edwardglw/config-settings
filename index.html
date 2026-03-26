@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Layered Settings Modal</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header>
+        <h1>Settings IA Prototype</h1>
+        <p>Large layered modal with clean, high-frequency controls for task-focused workflows.</p>
+      </header>
+      <button id="openSettings" class="primary-btn">Open Settings</button>
+    </main>
+
+    <div id="settingsModal" class="modal-backdrop" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <section class="modal-panel">
+        <header class="modal-header">
+          <div>
+            <h2 id="settingsTitle">Workspace Settings</h2>
+            <p>Layered controls for Areas A, B, and C.</p>
+          </div>
+          <button id="closeSettings" class="ghost-btn" aria-label="Close settings">✕</button>
+        </header>
+
+        <div class="modal-layout">
+          <nav class="area-nav" aria-label="Top-level area selection">
+            <button class="area-tab is-active" data-area="A">Area A</button>
+            <button class="area-tab" data-area="B">Area B</button>
+            <button class="area-tab" data-area="C">Area C</button>
+          </nav>
+
+          <section class="content-stage">
+            <div class="area-pane" data-pane="A">
+              <div class="pane-grid">
+                <aside class="subtopic-list" aria-label="Area A sub topics">
+                  <h3>Sub Topics</h3>
+                  <p class="helper">Always visible quick controls</p>
+                  <ul id="subtopicControls"></ul>
+                </aside>
+
+                <article class="detail-panel">
+                  <header class="detail-header">
+                    <div>
+                      <h3 id="topicTitle">Sub Topic 1</h3>
+                      <p id="topicDescription">Prioritize what is visible to your team.</p>
+                    </div>
+                    <div class="header-controls">
+                      <input id="itemFilter" type="search" placeholder="Filter items" aria-label="Filter setting items" />
+                      <button id="toggleAllVisible" class="ghost-btn">Toggle visible</button>
+                    </div>
+                  </header>
+
+                  <div class="item-list-wrap">
+                    <ul id="settingItems" class="item-list"></ul>
+                  </div>
+                </article>
+              </div>
+            </div>
+
+            <div class="area-pane is-hidden" data-pane="B">
+              <div class="empty-state">
+                <h3>Area B</h3>
+                <p>Reserved for workload automations and escalation controls.</p>
+              </div>
+            </div>
+
+            <div class="area-pane is-hidden" data-pane="C">
+              <div class="empty-state">
+                <h3>Area C</h3>
+                <p>Reserved for reporting preferences and notification delivery settings.</p>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <footer class="modal-footer">
+          <button class="ghost-btn">Reset defaults</button>
+          <button class="primary-btn">Save changes</button>
+        </footer>
+      </section>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
