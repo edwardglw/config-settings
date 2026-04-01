@@ -1,16 +1,22 @@
 /* ─────────────────────────────────────────────
-   IMAGE VISUALIZER — app.js
+   VISU — app.js
 ───────────────────────────────────────────── */
 
 // ── DOM refs ──────────────────────────────────
-const page1       = document.getElementById('page1');
-const page2       = document.getElementById('page2');
+const page1        = document.getElementById('page1');
+const page2        = document.getElementById('page2');
 const auroraCanvas = document.getElementById('aurora-canvas');
-const visCanvas   = document.getElementById('vis-canvas');
-const dropZone    = document.getElementById('drop-zone');
-const fileInput   = document.getElementById('file-input');
-const backBtn     = document.getElementById('back-btn');
-const thumb       = document.getElementById('thumb');
+const visCanvas    = document.getElementById('vis-canvas');
+const dropZone     = document.getElementById('drop-zone');
+const dzShell      = document.getElementById('dz-shell');
+const fileInput    = document.getElementById('file-input');
+const dzIdle       = document.getElementById('dz-idle');
+const dzProcessing = document.getElementById('dz-processing');
+const procFill     = document.getElementById('proc-fill');
+const procLabel    = document.getElementById('proc-label');
+const procPct      = document.getElementById('proc-pct');
+const backBtn      = document.getElementById('back-btn');
+const thumb        = document.getElementById('thumb');
 
 const paletteSwatches = document.getElementById('palette-swatches');
 const paletteBars     = document.getElementById('palette-bars');
@@ -19,83 +25,117 @@ const brightChart     = document.getElementById('bright-chart');
 const statsList       = document.getElementById('stats-list');
 const hueLabels       = document.getElementById('hue-labels');
 
-// ── Aurora background (page 1) ────────────────
+// ─────────────────────────────────────────────
+// AURORA ANIMATION (Page 1)
+// ─────────────────────────────────────────────
+
 const aCtx = auroraCanvas.getContext('2d');
 
-const ORBS = Array.from({ length: 7 }, (_, i) => ({
-  x: Math.random(),
-  y: Math.random(),
-  r: 0.25 + Math.random() * 0.3,
-  hue: (i * 51 + 200) % 360,
+// Initialise orbs once; all positions in logical (CSS) pixels
+const ORBS = Array.from({ length: 10 }, (_, i) => ({
+  xNorm: Math.random(),        // 0–1 normalised
+  yNorm: Math.random(),
+  rNorm: 0.28 + Math.random() * 0.34,
+  hue:   (i * 37 + 195) % 360,
   phase: Math.random() * Math.PI * 2,
-  speed: 0.0003 + Math.random() * 0.0004,
+  spd:   0.00025 + Math.random() * 0.00035,
+  sat:   65 + Math.random() * 20,
 }));
 
-function resizeCanvas(canvas) {
-  canvas.width  = canvas.offsetWidth  * devicePixelRatio;
-  canvas.height = canvas.offsetHeight * devicePixelRatio;
+function initAurora() {
+  auroraCanvas.width  = window.innerWidth  * devicePixelRatio;
+  auroraCanvas.height = window.innerHeight * devicePixelRatio;
 }
 
 function drawAurora(t) {
-  resizeCanvas(auroraCanvas);
-  const W = auroraCanvas.width, H = auroraCanvas.height;
-  aCtx.clearRect(0, 0, W, H);
+  const W = auroraCanvas.width;
+  const H = auroraCanvas.height;
 
-  // dark background
+  // Clear
+  aCtx.globalCompositeOperation = 'source-over';
   aCtx.fillStyle = '#060914';
   aCtx.fillRect(0, 0, W, H);
 
-  for (const orb of ORBS) {
-    const cx = (Math.sin(t * orb.speed + orb.phase) * 0.35 + 0.5) * W;
-    const cy = (Math.cos(t * orb.speed * 0.7 + orb.phase + 1.2) * 0.35 + 0.5) * H;
-    const rx = orb.r * Math.max(W, H);
+  aCtx.globalCompositeOperation = 'lighter';
 
-    const grad = aCtx.createRadialGradient(cx, cy, 0, cx, cy, rx);
-    const h = (orb.hue + t * 0.01) % 360;
-    grad.addColorStop(0,   `hsla(${h},80%,60%,0.22)`);
-    grad.addColorStop(0.5, `hsla(${h},70%,50%,0.08)`);
-    grad.addColorStop(1,   `hsla(${h},60%,40%,0)`);
+  for (const o of ORBS) {
+    const cx = (Math.sin(t * o.spd       + o.phase)       * 0.36 + 0.5) * W;
+    const cy = (Math.cos(t * o.spd * 0.7 + o.phase + 1.4) * 0.36 + 0.5) * H;
+    const r  = o.rNorm * Math.max(W, H);
+    const h  = (o.hue + t * 0.008) % 360;
 
-    aCtx.fillStyle = grad;
+    const g = aCtx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    g.addColorStop(0,   `hsla(${h},${o.sat}%,65%,0.18)`);
+    g.addColorStop(0.4, `hsla(${h},${o.sat}%,55%,0.09)`);
+    g.addColorStop(1,   `hsla(${h},${o.sat}%,40%,0)`);
+
+    aCtx.fillStyle = g;
     aCtx.fillRect(0, 0, W, H);
   }
+
+  aCtx.globalCompositeOperation = 'source-over';
 }
 
-// ── Vis particles (page 2) ────────────────────
-const vCtx = visCanvas.getContext('2d');
-let particles = [];
-let mouseX = 0, mouseY = 0;
-let visRunning = false;
-let animFrameId = null;
+let auroraRaf = null;
 
-function buildParticles(imageData, iW, iH, cW, cH) {
-  const COLS = Math.min(iW, 120);
-  const ROWS = Math.min(iH, 90);
+function startAurora() {
+  initAurora();
+  let t = performance.now();
+  const loop = (now) => {
+    drawAurora(now);
+    auroraRaf = requestAnimationFrame(loop);
+  };
+  auroraRaf = requestAnimationFrame(loop);
+}
+
+function stopAurora() {
+  if (auroraRaf) { cancelAnimationFrame(auroraRaf); auroraRaf = null; }
+}
+
+// ─────────────────────────────────────────────
+// PARTICLE VISUALIZATION (Page 2)
+// ─────────────────────────────────────────────
+
+const vCtx = visCanvas.getContext('2d');
+let particles  = [];
+let mouseX     = 0, mouseY = 0;
+let visRunning = false;
+let visRaf     = null;
+
+function initVisCanvas() {
+  visCanvas.width  = window.innerWidth  * devicePixelRatio;
+  visCanvas.height = window.innerHeight * devicePixelRatio;
+}
+
+function buildParticles(imgPixels, iW, iH) {
+  const cW = window.innerWidth, cH = window.innerHeight;
+  const COLS = Math.min(iW, 110);
+  const ROWS = Math.min(iH, 85);
   const out  = [];
+
+  const padX = cW * 0.08, padY = cH * 0.08;
+  const areaW = cW * 0.84, areaH = cH * 0.84;
 
   for (let row = 0; row < ROWS; row++) {
     for (let col = 0; col < COLS; col++) {
-      const ix = Math.floor(col / COLS * iW);
-      const iy = Math.floor(row / ROWS * iH);
+      const ix  = Math.floor(col / COLS * iW);
+      const iy  = Math.floor(row / ROWS * iH);
       const idx = (iy * iW + ix) * 4;
-      const r = imageData[idx], g = imageData[idx+1], b = imageData[idx+2];
-      const bright = (r + g + b) / 765;
+      const r   = imgPixels[idx], g = imgPixels[idx+1], b = imgPixels[idx+2];
+      const lum = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
 
-      // Map to canvas coords — fill 80% of screen, centered
-      const padX = cW * 0.1, padY = cH * 0.1;
-      const hx = padX + (col / COLS) * (cW * 0.8);
-      const hy = padY + (row / ROWS) * (cH * 0.8);
+      const hx = padX + (col / COLS) * areaW;
+      const hy = padY + (row / ROWS) * areaH;
 
       out.push({
-        hx, hy,          // home position
+        hx, hy,
         x: Math.random() * cW,
         y: Math.random() * cH,
         vx: 0, vy: 0,
-        r, g, b,
-        bright,
-        size: 1.6 + bright * 1.4,
+        r, g, b, lum,
+        size:  1.4 + lum * 1.8,
         phase: Math.random() * Math.PI * 2,
-        speed: 0.4 + Math.random() * 0.6,
+        spd:   0.4 + Math.random() * 0.5,
       });
     }
   }
@@ -104,46 +144,58 @@ function buildParticles(imageData, iW, iH, cW, cH) {
 
 function drawVis(t) {
   if (!visRunning) return;
-  animFrameId = requestAnimationFrame(drawVis);
+  visRaf = requestAnimationFrame(drawVis);
 
-  const W = visCanvas.width, H = visCanvas.height;
+  const dpr = devicePixelRatio;
+  const W   = visCanvas.width  / dpr;
+  const H   = visCanvas.height / dpr;
 
-  // Fade trail
-  vCtx.fillStyle = 'rgba(6,9,20,0.25)';
+  // draw in logical pixels
+  vCtx.save();
+  vCtx.scale(dpr, dpr);
+
+  vCtx.fillStyle = 'rgba(6,9,20,0.28)';
   vCtx.fillRect(0, 0, W, H);
 
   for (const p of particles) {
-    // Spring toward home
     const dx = p.hx - p.x, dy = p.hy - p.y;
-    const dist = Math.sqrt(dx*dx + dy*dy) || 1;
 
     // Mouse repulsion
     const mdx = p.x - mouseX, mdy = p.y - mouseY;
-    const mDist = Math.sqrt(mdx*mdx + mdy*mdy) || 1;
-    const mForce = mDist < 120 ? (120 - mDist) / 120 * 3 : 0;
+    const mDistSq = mdx*mdx + mdy*mdy;
+    const mForce  = mDistSq < 14400 ? (120 - Math.sqrt(mDistSq)) / 120 * 3.5 : 0; // 120px radius
 
-    p.vx += dx * 0.04 + Math.sin(t * 0.0009 + p.phase) * 0.3 + (mdx / mDist) * mForce;
-    p.vy += dy * 0.04 + Math.cos(t * 0.0007 + p.phase) * 0.3 + (mdy / mDist) * mForce;
-    p.vx *= 0.88; p.vy *= 0.88;
-    p.x += p.vx * p.speed;
-    p.y += p.vy * p.speed;
+    p.vx += dx * 0.038
+          + Math.sin(t * 0.0008 + p.phase) * 0.28
+          + (mDistSq > 0 ? (mdx / Math.sqrt(mDistSq)) * mForce : 0);
+    p.vy += dy * 0.038
+          + Math.cos(t * 0.0006 + p.phase + 1) * 0.28
+          + (mDistSq > 0 ? (mdy / Math.sqrt(mDistSq)) * mForce : 0);
 
-    const alpha = 0.55 + p.bright * 0.4;
+    p.vx *= 0.87; p.vy *= 0.87;
+    p.x  += p.vx * p.spd;
+    p.y  += p.vy * p.spd;
+
+    const alpha = 0.45 + p.lum * 0.5;
     vCtx.beginPath();
     vCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
     vCtx.fillStyle = `rgba(${p.r},${p.g},${p.b},${alpha})`;
     vCtx.fill();
   }
+
+  vCtx.restore();
 }
 
-// ── Color analysis ────────────────────────────
+// ─────────────────────────────────────────────
+// COLOR ANALYSIS
+// ─────────────────────────────────────────────
 
 function rgbToHsl(r, g, b) {
   r /= 255; g /= 255; b /= 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  let h, s, l = (max + min) / 2;
-  if (max === min) { h = s = 0; }
-  else {
+  const max = Math.max(r,g,b), min = Math.min(r,g,b);
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
     const d = max - min;
     s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
     switch (max) {
@@ -156,21 +208,17 @@ function rgbToHsl(r, g, b) {
 }
 
 function colorDist(a, b) {
-  return Math.sqrt(
-    (a[0]-b[0])**2 + (a[1]-b[1])**2 + (a[2]-b[2])**2
-  );
+  return (a[0]-b[0])**2 + (a[1]-b[1])**2 + (a[2]-b[2])**2;
 }
 
-function kMeans(pixels, k = 8, iters = 16) {
-  // spread initial centroids
+function kMeans(pixels, k = 8, iters = 18) {
+  const step = Math.max(1, Math.floor(pixels.length / k));
   let centroids = [];
-  const step = Math.floor(pixels.length / k);
-  for (let i = 0; i < k; i++) centroids.push([...pixels[i * step]]);
+  for (let i = 0; i < k; i++) centroids.push([...pixels[Math.min(i * step, pixels.length - 1)]]);
 
-  let assignments = new Int32Array(pixels.length);
+  const assignments = new Int32Array(pixels.length);
 
   for (let iter = 0; iter < iters; iter++) {
-    // assign
     for (let i = 0; i < pixels.length; i++) {
       let best = 0, bestD = Infinity;
       for (let c = 0; c < k; c++) {
@@ -179,102 +227,91 @@ function kMeans(pixels, k = 8, iters = 16) {
       }
       assignments[i] = best;
     }
-    // update
     const sums  = Array.from({ length: k }, () => [0, 0, 0]);
-    const counts = new Int32Array(k);
+    const cnts  = new Int32Array(k);
     for (let i = 0; i < pixels.length; i++) {
       const c = assignments[i];
       sums[c][0] += pixels[i][0];
       sums[c][1] += pixels[i][1];
       sums[c][2] += pixels[i][2];
-      counts[c]++;
+      cnts[c]++;
     }
     for (let c = 0; c < k; c++) {
-      if (counts[c] > 0) {
-        centroids[c] = sums[c].map(v => v / counts[c]);
-      }
+      if (cnts[c]) centroids[c] = sums[c].map(v => v / cnts[c]);
     }
   }
 
-  // count cluster sizes
-  const counts2 = new Int32Array(k);
-  for (let i = 0; i < pixels.length; i++) counts2[assignments[i]]++;
+  const cnts2 = new Int32Array(k);
+  for (let i = 0; i < pixels.length; i++) cnts2[assignments[i]]++;
 
   return centroids
-    .map((c, i) => ({ color: c, count: counts2[i] }))
-    .sort((a, b) => b.count - a.count)
-    .filter(e => e.count > 0);
+    .map((color, i) => ({ color, count: cnts2[i] }))
+    .filter(e => e.count > 0)
+    .sort((a, b) => b.count - a.count);
 }
 
-function analyzeImage(data, w, h) {
-  // Sample every 6th pixel for performance
+function analyzeImage(data, iW, iH) {
   const sampled = [];
-  for (let i = 0; i < data.length; i += 4 * 6) {
-    const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
+  for (let i = 0; i < data.length; i += 4 * 7) {
+    const a = data[i+3];
     if (a < 128) continue;
-    sampled.push([r, g, b]);
+    sampled.push([data[i], data[i+1], data[i+2]]);
   }
 
   const clusters = kMeans(sampled, 8);
   const total    = sampled.length;
 
-  // Hue buckets: Red, Orange, Yellow, Green, Cyan, Blue, Purple, Pink, Neutral
   const hueBuckets = { Red:0, Orange:0, Yellow:0, Green:0, Cyan:0, Blue:0, Purple:0, Pink:0, Neutral:0 };
   let dark = 0, mid = 0, bright = 0;
-  let totalSat = 0, uniqueSet = new Set();
+  let totalSat = 0;
+  const uniqueSet = new Set();
 
   for (const [r, g, b] of sampled) {
     const [hue, sat, lum] = rgbToHsl(r, g, b);
     totalSat += sat;
+    uniqueSet.add(((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3));
 
-    // Quantize for unique color estimate
-    const qr = r >> 3, qg = g >> 3, qb = b >> 3;
-    uniqueSet.add((qr << 10) | (qg << 5) | qb);
-
-    if (lum < 30) dark++;
+    if      (lum < 30) dark++;
     else if (lum < 70) mid++;
-    else bright++;
+    else               bright++;
 
-    if (sat < 15) { hueBuckets.Neutral++; continue; }
-    if (hue < 20 || hue >= 340)  hueBuckets.Red++;
-    else if (hue < 45)           hueBuckets.Orange++;
-    else if (hue < 70)           hueBuckets.Yellow++;
-    else if (hue < 160)          hueBuckets.Green++;
-    else if (hue < 195)          hueBuckets.Cyan++;
-    else if (hue < 260)          hueBuckets.Blue++;
-    else if (hue < 300)          hueBuckets.Purple++;
-    else                         hueBuckets.Pink++;
+    if (sat < 14) { hueBuckets.Neutral++; continue; }
+    if      (hue < 20 || hue >= 340) hueBuckets.Red++;
+    else if (hue < 46)               hueBuckets.Orange++;
+    else if (hue < 70)               hueBuckets.Yellow++;
+    else if (hue < 160)              hueBuckets.Green++;
+    else if (hue < 195)              hueBuckets.Cyan++;
+    else if (hue < 260)              hueBuckets.Blue++;
+    else if (hue < 300)              hueBuckets.Purple++;
+    else                             hueBuckets.Pink++;
   }
 
-  return {
-    clusters,
-    total,
-    hueBuckets,
-    brightness: { dark, mid, bright },
-    avgSat: totalSat / total,
-    uniqueColors: uniqueSet.size,
-    w, h,
-  };
+  return { clusters, total, hueBuckets,
+           brightness: { dark, mid, bright },
+           avgSat: totalSat / total,
+           uniqueColors: uniqueSet.size,
+           w: iW, h: iH };
 }
 
-// ── Render cards ──────────────────────────────
+// ─────────────────────────────────────────────
+// RENDER CARDS
+// ─────────────────────────────────────────────
 
 function renderPalette(clusters, total) {
   paletteSwatches.innerHTML = '';
-  paletteBars.innerHTML = '';
+  paletteBars.innerHTML     = '';
 
   clusters.slice(0, 8).forEach(({ color, count }) => {
     const [r, g, b] = color.map(Math.round);
     const pct = Math.round(count / total * 100);
-    const hex = '#' + [r, g, b].map(v => v.toString(16).padStart(2,'0')).join('');
+    const hex = '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
 
-    const sw = document.createElement('div');
-    sw.className = 'swatch';
+    const sw  = document.createElement('div');
+    sw.className       = 'swatch';
     sw.style.background = hex;
-    sw.title = hex;
-    const tip = document.createElement('span');
-    tip.className = 'swatch-tip';
-    tip.textContent = hex;
+    const tip           = document.createElement('span');
+    tip.className       = 'swatch-tip';
+    tip.textContent     = hex;
     sw.appendChild(tip);
     paletteSwatches.appendChild(sw);
 
@@ -282,187 +319,192 @@ function renderPalette(clusters, total) {
     row.className = 'p-bar-row';
     row.innerHTML = `
       <div class="p-bar-track">
-        <div class="p-bar-fill" style="width:0%;background:${hex}"></div>
+        <div class="p-bar-fill" style="background:${hex}"></div>
       </div>
-      <span class="p-bar-pct">${pct}%</span>
-    `;
+      <span class="p-bar-pct">${pct}%</span>`;
     paletteBars.appendChild(row);
 
-    // Animate bar fill
     requestAnimationFrame(() => {
-      const fill = row.querySelector('.p-bar-fill');
-      fill.style.width = pct + '%';
+      row.querySelector('.p-bar-fill').style.width = pct + '%';
     });
   });
 }
 
 function renderHueChart(hueBuckets) {
-  const ctx  = hueChart.getContext('2d');
-  const dpr  = devicePixelRatio;
-  hueChart.width  = 260 * dpr;
-  hueChart.height = 90  * dpr;
+  const dpr = devicePixelRatio;
+  const W   = 260, H = 90;
+  hueChart.width  = W * dpr;
+  hueChart.height = H * dpr;
+  const ctx = hueChart.getContext('2d');
   ctx.scale(dpr, dpr);
 
-  const W = 260, H = 90;
-  const entries = Object.entries(hueBuckets);
-  const maxVal  = Math.max(...entries.map(e => e[1]), 1);
-
-  const hueColors = {
+  const entries  = Object.entries(hueBuckets);
+  const maxVal   = Math.max(...entries.map(e => e[1]), 1);
+  const hueColor = {
     Red:'#ff5b5b', Orange:'#ff9d4d', Yellow:'#ffe066',
-    Green:'#66e08f', Cyan:'#40d0e8', Blue:'#5b87ff',
-    Purple:'#a97aff', Pink:'#ff7acd', Neutral:'#9098b0',
+    Green:'#5fe088', Cyan:'#40d0e8', Blue:'#5b87ff',
+    Purple:'#a97aff', Pink:'#ff7acd', Neutral:'#7a849e',
   };
-
   const bw = (W - 8) / entries.length;
-  ctx.clearRect(0, 0, W, H);
 
   entries.forEach(([name, val], i) => {
-    const bh = (val / maxVal) * (H - 18);
+    const bh = Math.max(2, (val / maxVal) * (H - 20));
     const x  = 4 + i * bw;
-    const y  = H - 14 - bh;
+    const y  = H - 16 - bh;
+    const c  = hueColor[name] || '#fff';
 
-    const grad = ctx.createLinearGradient(0, y, 0, H - 14);
-    grad.addColorStop(0, hueColors[name] || '#fff');
-    grad.addColorStop(1, (hueColors[name] || '#fff') + '44');
-    ctx.fillStyle = grad;
-
+    const g = ctx.createLinearGradient(0, y, 0, H - 16);
+    g.addColorStop(0, c);
+    g.addColorStop(1, c + '44');
+    ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.roundRect(x + 2, y, bw - 4, bh + 2, [3, 3, 0, 0]);
+    ctx.roundRect(x + 2, y, bw - 4, bh, [3, 3, 0, 0]);
     ctx.fill();
   });
 
-  hueLabels.innerHTML = '';
-  ['R','O','Y','G','C','B','P','Pk','N'].forEach(label => {
-    const s = document.createElement('span');
-    s.textContent = label;
-    hueLabels.appendChild(s);
-  });
+  hueLabels.innerHTML = ['R','O','Y','G','Cy','B','P','Pk','N']
+    .map(l => `<span>${l}</span>`).join('');
 }
 
 function renderBrightChart({ dark, mid, bright }) {
-  const ctx = brightChart.getContext('2d');
   const dpr = devicePixelRatio;
-  brightChart.width  = 260 * dpr;
-  brightChart.height = 90  * dpr;
+  const W   = 260, H = 90;
+  brightChart.width  = W * dpr;
+  brightChart.height = H * dpr;
+  const ctx = brightChart.getContext('2d');
   ctx.scale(dpr, dpr);
 
-  const W = 260, H = 90;
-  const total = dark + mid + bright || 1;
-  const values = [dark, mid, bright];
-  const colors = [
-    ['#2a2a4a','#4a4a6a'],
-    ['#5042cc','#7c6cfc'],
-    ['#a098ee','#c0b8ff'],
-  ];
+  const total  = dark + mid + bright || 1;
+  const vals   = [dark, mid, bright];
   const labels = ['Shadows','Midtones','Highlights'];
+  const cols   = [['#2a2446','#3b3860'], ['#5042cc','#7c6cfc'], ['#9088e0','#b3aaff']];
+  const bw     = (W - 8) / 3;
 
-  ctx.clearRect(0, 0, W, H);
-  const bw = (W - 8) / 3;
-
-  values.forEach((val, i) => {
-    const bh = (val / total) * (H - 18);
+  vals.forEach((val, i) => {
+    const bh = Math.max(2, (val / total) * (H - 20));
     const x  = 4 + i * bw;
-    const y  = H - 14 - bh;
-
-    const grad = ctx.createLinearGradient(0, y, 0, H - 14);
-    grad.addColorStop(0, colors[i][1]);
-    grad.addColorStop(1, colors[i][0]);
-    ctx.fillStyle = grad;
-
+    const y  = H - 16 - bh;
+    const g  = ctx.createLinearGradient(0, y, 0, H - 16);
+    g.addColorStop(0, cols[i][1]);
+    g.addColorStop(1, cols[i][0]);
+    ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.roundRect(x + 4, y, bw - 8, bh + 2, [4, 4, 0, 0]);
+    ctx.roundRect(x + 5, y, bw - 10, bh, [4, 4, 0, 0]);
     ctx.fill();
 
-    ctx.fillStyle = 'rgba(220,230,255,0.5)';
-    ctx.font = '10px Inter, sans-serif';
+    const pct = Math.round(val / total * 100);
+    ctx.fillStyle = 'rgba(200,212,255,0.55)';
+    ctx.font = `${10 * dpr / dpr}px Inter, sans-serif`;
     ctx.textAlign = 'center';
-    ctx.fillText(Math.round(val / total * 100) + '%', x + bw / 2, y - 4);
+    ctx.fillText(pct + '%', x + bw / 2, y - 4);
   });
 }
 
 function renderStats({ w, h, uniqueColors, avgSat, total }) {
-  const items = [
-    ['Dimensions', `${w} × ${h}`],
-    ['Pixels sampled', total.toLocaleString()],
-    ['Unique colors', `~${uniqueColors.toLocaleString()}`],
-    ['Avg saturation', `${Math.round(avgSat)}%`],
-    ['Aspect ratio', (w/h).toFixed(2)],
+  const rows = [
+    ['Dimensions',      `${w} × ${h}`],
+    ['Pixels sampled',  total.toLocaleString()],
+    ['Unique colors',   `~${uniqueColors.toLocaleString()}`],
+    ['Avg saturation',  `${Math.round(avgSat)}%`],
+    ['Aspect ratio',    (w / h).toFixed(2)],
   ];
-  statsList.innerHTML = items.map(([label, val]) => `
-    <li>
-      <span class="s-label">${label}</span>
-      <span class="s-val">${val}</span>
-    </li>
+  statsList.innerHTML = rows.map(([lbl, val]) => `
+    <li><span class="s-label">${lbl}</span><span class="s-val">${val}</span></li>
   `).join('');
 }
 
-// ── Page transitions ──────────────────────────
+// ─────────────────────────────────────────────
+// PROGRESS BAR
+// ─────────────────────────────────────────────
 
-let auroraFrameId = null;
-
-function startAurora() {
-  let t = 0;
-  function loop() {
-    t += 16;
-    drawAurora(t);
-    auroraFrameId = requestAnimationFrame(loop);
-  }
-  loop();
+function tick() {
+  return new Promise(r => setTimeout(r, 0));
 }
 
-function stopAurora() {
-  if (auroraFrameId) { cancelAnimationFrame(auroraFrameId); auroraFrameId = null; }
+async function setProgress(pct, label) {
+  procFill.style.width  = pct + '%';
+  procPct.textContent   = pct + '%';
+  procLabel.textContent = label;
+  await tick();          // yield so the browser can repaint
 }
 
-function showPage2(file) {
-  const url  = URL.createObjectURL(file);
-  const img  = new Image();
-  img.onload = () => {
-    thumb.src = url;
+// ─────────────────────────────────────────────
+// PAGE TRANSITIONS
+// ─────────────────────────────────────────────
 
-    // Draw image to offscreen canvas to read pixels
-    const off = document.createElement('canvas');
-    const MAX = 600;
-    const scale = Math.min(1, MAX / Math.max(img.width, img.height));
-    off.width  = Math.round(img.width  * scale);
-    off.height = Math.round(img.height * scale);
-    const octx = off.getContext('2d');
-    octx.drawImage(img, 0, 0, off.width, off.height);
-    const imgData = octx.getImageData(0, 0, off.width, off.height);
+async function processAndShowPage2(file) {
+  // Switch drop zone to processing UI
+  dzIdle.hidden      = true;
+  dzProcessing.hidden = false;
+  fileInput.disabled = true;
 
-    const analysis = analyzeImage(imgData.data, img.width, img.height);
+  await setProgress(5,  'Reading image…');
 
-    // Render cards
-    renderPalette(analysis.clusters, analysis.total);
-    renderHueChart(analysis.hueBuckets);
-    renderBrightChart(analysis.brightness);
-    renderStats(analysis);
+  // Load image via object URL
+  const url = URL.createObjectURL(file);
+  const img = await new Promise((res, rej) => {
+    const i = new Image();
+    i.onload  = () => res(i);
+    i.onerror = rej;
+    i.src     = url;
+  });
 
-    // Resize vis canvas
-    visCanvas.width  = window.innerWidth  * devicePixelRatio;
-    visCanvas.height = window.innerHeight * devicePixelRatio;
-    vCtx.scale(devicePixelRatio, devicePixelRatio);
+  await setProgress(22, 'Sampling pixels…');
 
-    // Build particle system
-    particles = buildParticles(
-      imgData.data, off.width, off.height,
-      window.innerWidth, window.innerHeight
-    );
+  // Draw to offscreen canvas (max 600px on longest side)
+  const off   = document.createElement('canvas');
+  const scale = Math.min(1, 600 / Math.max(img.width, img.height));
+  off.width   = Math.round(img.width  * scale);
+  off.height  = Math.round(img.height * scale);
+  off.getContext('2d').drawImage(img, 0, 0, off.width, off.height);
+  const imgData = off.getContext('2d').getImageData(0, 0, off.width, off.height);
 
-    // Transition
-    stopAurora();
-    page1.classList.add('is-hidden');
-    page2.classList.remove('is-hidden');
+  await setProgress(42, 'Analyzing colors…');
 
-    visRunning = true;
-    requestAnimationFrame(drawVis);
-  };
-  img.src = url;
+  const analysis = analyzeImage(imgData.data, img.width, img.height);
+
+  await setProgress(62, 'Building palette…');
+
+  renderPalette(analysis.clusters, analysis.total);
+
+  await setProgress(75, 'Rendering charts…');
+
+  renderHueChart(analysis.hueBuckets);
+  renderBrightChart(analysis.brightness);
+  renderStats(analysis);
+  thumb.src = url;
+
+  await setProgress(88, 'Spawning particles…');
+
+  initVisCanvas();
+  particles = buildParticles(imgData.data, off.width, off.height);
+
+  await setProgress(100, 'Done!');
+
+  // Brief pause so user sees 100%
+  await new Promise(r => setTimeout(r, 320));
+
+  // Transition pages
+  stopAurora();
+  page1.classList.add('is-hidden');
+  page2.classList.remove('is-hidden');
+
+  visRunning = true;
+  visRaf = requestAnimationFrame(drawVis);
+
+  // Reset upload zone for next time
+  setTimeout(() => {
+    dzIdle.hidden       = false;
+    dzProcessing.hidden = true;
+    fileInput.disabled  = false;
+    procFill.style.width = '0%';
+    fileInput.value = '';
+  }, 700);
 }
 
 function showPage1() {
   visRunning = false;
-  if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null; }
+  if (visRaf) { cancelAnimationFrame(visRaf); visRaf = null; }
   particles = [];
 
   page2.classList.add('is-hidden');
@@ -471,19 +513,29 @@ function showPage1() {
   startAurora();
 }
 
-// ── Event listeners ───────────────────────────
+// ─────────────────────────────────────────────
+// EVENT LISTENERS
+// ─────────────────────────────────────────────
 
 function handleFile(file) {
   if (!file || !file.type.startsWith('image/')) return;
-  showPage2(file);
+  processAndShowPage2(file);
 }
 
-dropZone.addEventListener('click', () => fileInput.click());
-dropZone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') fileInput.click(); });
+// Click to open file browser (but NOT when clicking the actual input)
+dropZone.addEventListener('click', (e) => {
+  if (e.target === fileInput) return;
+  fileInput.click();
+});
+
+dropZone.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+});
+
 fileInput.addEventListener('change', () => handleFile(fileInput.files[0]));
 
-dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
-dropZone.addEventListener('dragleave', ()  => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
 dropZone.addEventListener('drop', e => {
   e.preventDefault();
   dropZone.classList.remove('drag-over');
@@ -492,17 +544,18 @@ dropZone.addEventListener('drop', e => {
 
 backBtn.addEventListener('click', showPage1);
 
-document.addEventListener('mousemove', e => {
-  mouseX = e.clientX;
-  mouseY = e.clientY;
-});
+document.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+document.addEventListener('touchmove', e => {
+  const t = e.touches[0];
+  mouseX = t.clientX; mouseY = t.clientY;
+}, { passive: true });
 
 window.addEventListener('resize', () => {
-  if (!page2.classList.contains('is-hidden')) {
-    visCanvas.width  = window.innerWidth  * devicePixelRatio;
-    visCanvas.height = window.innerHeight * devicePixelRatio;
-  }
+  initAurora();
+  if (!page2.classList.contains('is-hidden')) initVisCanvas();
 });
 
-// ── Boot ──────────────────────────────────────
+// ─────────────────────────────────────────────
+// BOOT
+// ─────────────────────────────────────────────
 startAurora();
