@@ -58,6 +58,15 @@ html, body {
   pointer-events: none;
 }
 
+.version-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(200,212,255,0.35);
+  letter-spacing: 0.05em;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
 .logo {
   font-size: 15px;
   font-weight: 800;
