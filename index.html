@@ -3,84 +3,89 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Layered Settings Modal</title>
+    <title>Image Visualizer</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <main class="app-shell">
-      <header>
-        <h1>Settings IA Prototype</h1>
-        <p>Large layered modal with clean, high-frequency controls for task-focused workflows.</p>
-      </header>
-      <button id="openSettings" class="primary-btn">Open Settings</button>
-    </main>
 
-    <div id="settingsModal" class="modal-backdrop" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
-      <section class="modal-panel">
-        <header class="modal-header">
-          <div>
-            <h2 id="settingsTitle">Workspace Settings</h2>
-            <p>Layered controls for Areas A, B, and C.</p>
+    <!-- PAGE 1 -->
+    <div id="page1" class="page">
+      <canvas id="aurora-canvas"></canvas>
+      <div class="upload-wrapper">
+        <div class="upload-eyebrow">Image Visualizer</div>
+        <h1 class="upload-headline">Drop your image.<br>Watch it come alive.</h1>
+        <p class="upload-sub">Upload any image to generate an interactive visualization with live data insights.</p>
+        <div id="drop-zone" class="drop-zone" role="button" tabindex="0" aria-label="Upload image">
+          <div class="drop-inner">
+            <div class="drop-icon">
+              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M24 8v24M14 18l10-10 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M8 36h32" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <span class="drop-label">Drag &amp; drop or <u>browse</u></span>
+            <span class="drop-hint">PNG, JPG, WebP — any size</span>
           </div>
-          <button id="closeSettings" class="ghost-btn" aria-label="Close settings">✕</button>
-        </header>
+          <input id="file-input" type="file" accept="image/*" aria-hidden="true" />
+        </div>
+      </div>
+    </div>
 
-        <div class="modal-layout">
-          <nav class="area-nav" aria-label="Top-level area selection">
-            <button class="area-tab is-active" data-area="A">Area A</button>
-            <button class="area-tab" data-area="B">Area B</button>
-            <button class="area-tab" data-area="C">Area C</button>
-          </nav>
+    <!-- PAGE 2 -->
+    <div id="page2" class="page is-hidden">
+      <canvas id="vis-canvas"></canvas>
 
-          <section class="content-stage">
-            <div class="area-pane" data-pane="A">
-              <div class="pane-grid">
-                <aside class="subtopic-list" aria-label="Area A sub topics">
-                  <h3>Sub Topics</h3>
-                  <p class="helper">Always visible quick controls</p>
-                  <ul id="subtopicControls"></ul>
-                </aside>
+      <button id="back-btn" class="back-btn" aria-label="Back to upload">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M19 12H5M5 12l7-7M5 12l7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        New image
+      </button>
 
-                <article class="detail-panel">
-                  <header class="detail-header">
-                    <div>
-                      <h3 id="topicTitle">Sub Topic 1</h3>
-                      <p id="topicDescription">Prioritize what is visible to your team.</p>
-                    </div>
-                    <div class="header-controls">
-                      <input id="itemFilter" type="search" placeholder="Filter items" aria-label="Filter setting items" />
-                      <button id="toggleAllVisible" class="ghost-btn">Toggle visible</button>
-                    </div>
-                  </header>
+      <img id="thumb" class="thumb" alt="Uploaded image thumbnail" />
 
-                  <div class="item-list-wrap">
-                    <ul id="settingItems" class="item-list"></ul>
-                  </div>
-                </article>
-              </div>
-            </div>
+      <div class="cards-grid">
 
-            <div class="area-pane is-hidden" data-pane="B">
-              <div class="empty-state">
-                <h3>Area B</h3>
-                <p>Reserved for workload automations and escalation controls.</p>
-              </div>
-            </div>
-
-            <div class="area-pane is-hidden" data-pane="C">
-              <div class="empty-state">
-                <h3>Area C</h3>
-                <p>Reserved for reporting preferences and notification delivery settings.</p>
-              </div>
-            </div>
-          </section>
+        <div class="card" id="card-palette">
+          <div class="card-header">
+            <span class="card-icon">&#9632;</span>
+            <h3>Dominant Colors</h3>
+          </div>
+          <div id="palette-swatches" class="palette-swatches"></div>
+          <div id="palette-bars" class="palette-bars"></div>
         </div>
 
-        <footer class="modal-footer">
-          <button class="ghost-btn">Reset defaults</button>
-          <button class="primary-btn">Save changes</button>
-        </footer>
-      </section>
+        <div class="card" id="card-hue">
+          <div class="card-header">
+            <span class="card-icon">&#9670;</span>
+            <h3>Hue Distribution</h3>
+          </div>
+          <canvas id="hue-chart" width="260" height="90"></canvas>
+          <div id="hue-labels" class="hue-labels"></div>
+        </div>
+
+        <div class="card" id="card-stats">
+          <div class="card-header">
+            <span class="card-icon">&#9632;</span>
+            <h3>Image Metrics</h3>
+          </div>
+          <ul id="stats-list" class="stats-list"></ul>
+        </div>
+
+        <div class="card" id="card-brightness">
+          <div class="card-header">
+            <span class="card-icon">&#9670;</span>
+            <h3>Brightness Profile</h3>
+          </div>
+          <canvas id="bright-chart" width="260" height="90"></canvas>
+          <div class="bright-legend">
+            <span class="bl dark">Shadows</span>
+            <span class="bl mid">Midtones</span>
+            <span class="bl bright">Highlights</span>
+          </div>
+        </div>
+
+      </div>
     </div>
 
     <script src="app.js"></script>
