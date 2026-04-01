@@ -7,16 +7,15 @@ const page1        = document.getElementById('page1');
 const page2        = document.getElementById('page2');
 const auroraCanvas = document.getElementById('aurora-canvas');
 const visCanvas    = document.getElementById('vis-canvas');
-const dropZone     = document.getElementById('drop-zone');
 const dzShell      = document.getElementById('dz-shell');
 const fileInput    = document.getElementById('file-input');
-const dzIdle       = document.getElementById('dz-idle');
-const dzProcessing = document.getElementById('dz-processing');
-const procFill     = document.getElementById('proc-fill');
-const procLabel    = document.getElementById('proc-label');
-const procPct      = document.getElementById('proc-pct');
 const backBtn      = document.getElementById('back-btn');
 const thumb        = document.getElementById('thumb');
+
+const p2Loader     = document.getElementById('p2-loader');
+const ldFill       = document.getElementById('ld-fill');
+const ldLabel      = document.getElementById('ld-label');
+const ldPct        = document.getElementById('ld-pct');
 
 const paletteSwatches = document.getElementById('palette-swatches');
 const paletteBars     = document.getElementById('palette-bars');
@@ -24,16 +23,16 @@ const hueChart        = document.getElementById('hue-chart');
 const brightChart     = document.getElementById('bright-chart');
 const statsList       = document.getElementById('stats-list');
 const hueLabels       = document.getElementById('hue-labels');
+const cardsGrid       = document.getElementById('cards-grid') || document.querySelector('.cards-grid');
 
 // ─────────────────────────────────────────────
-// AURORA ANIMATION (Page 1)
+// AURORA (Page 1)
 // ─────────────────────────────────────────────
 
 const aCtx = auroraCanvas.getContext('2d');
 
-// Initialise orbs once; all positions in logical (CSS) pixels
 const ORBS = Array.from({ length: 10 }, (_, i) => ({
-  xNorm: Math.random(),        // 0–1 normalised
+  xNorm: Math.random(),
   yNorm: Math.random(),
   rNorm: 0.28 + Math.random() * 0.34,
   hue:   (i * 37 + 195) % 360,
@@ -51,11 +50,9 @@ function drawAurora(t) {
   const W = auroraCanvas.width;
   const H = auroraCanvas.height;
 
-  // Clear
   aCtx.globalCompositeOperation = 'source-over';
   aCtx.fillStyle = '#060914';
   aCtx.fillRect(0, 0, W, H);
-
   aCtx.globalCompositeOperation = 'lighter';
 
   for (const o of ORBS) {
@@ -80,7 +77,6 @@ let auroraRaf = null;
 
 function startAurora() {
   initAurora();
-  let t = performance.now();
   const loop = (now) => {
     drawAurora(now);
     auroraRaf = requestAnimationFrame(loop);
@@ -93,12 +89,13 @@ function stopAurora() {
 }
 
 // ─────────────────────────────────────────────
-// PARTICLE VISUALIZATION (Page 2)
+// PARTICLE VIS (Page 2)
 // ─────────────────────────────────────────────
 
 const vCtx = visCanvas.getContext('2d');
 let particles  = [];
-let mouseX     = 0, mouseY = 0;
+let mouseX = window.innerWidth  / 2;
+let mouseY = window.innerHeight / 2;
 let visRunning = false;
 let visRaf     = null;
 
@@ -108,11 +105,11 @@ function initVisCanvas() {
 }
 
 function buildParticles(imgPixels, iW, iH) {
-  const cW = window.innerWidth, cH = window.innerHeight;
+  const cW   = window.innerWidth;
+  const cH   = window.innerHeight;
   const COLS = Math.min(iW, 110);
   const ROWS = Math.min(iH, 85);
   const out  = [];
-
   const padX = cW * 0.08, padY = cH * 0.08;
   const areaW = cW * 0.84, areaH = cH * 0.84;
 
@@ -124,13 +121,11 @@ function buildParticles(imgPixels, iW, iH) {
       const r   = imgPixels[idx], g = imgPixels[idx+1], b = imgPixels[idx+2];
       const lum = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
 
-      const hx = padX + (col / COLS) * areaW;
-      const hy = padY + (row / ROWS) * areaH;
-
       out.push({
-        hx, hy,
-        x: Math.random() * cW,
-        y: Math.random() * cH,
+        hx: padX + (col / COLS) * areaW,
+        hy: padY + (row / ROWS) * areaH,
+        x:  Math.random() * cW,
+        y:  Math.random() * cH,
         vx: 0, vy: 0,
         r, g, b, lum,
         size:  1.4 + lum * 1.8,
@@ -150,7 +145,6 @@ function drawVis(t) {
   const W   = visCanvas.width  / dpr;
   const H   = visCanvas.height / dpr;
 
-  // draw in logical pixels
   vCtx.save();
   vCtx.scale(dpr, dpr);
 
@@ -160,26 +154,20 @@ function drawVis(t) {
   for (const p of particles) {
     const dx = p.hx - p.x, dy = p.hy - p.y;
 
-    // Mouse repulsion
     const mdx = p.x - mouseX, mdy = p.y - mouseY;
-    const mDistSq = mdx*mdx + mdy*mdy;
-    const mForce  = mDistSq < 14400 ? (120 - Math.sqrt(mDistSq)) / 120 * 3.5 : 0; // 120px radius
+    const mDistSq = mdx*mdx + mdy*mdy || 1;
+    const mDist   = Math.sqrt(mDistSq);
+    const mForce  = mDist < 120 ? (120 - mDist) / 120 * 3.5 : 0;
 
-    p.vx += dx * 0.038
-          + Math.sin(t * 0.0008 + p.phase) * 0.28
-          + (mDistSq > 0 ? (mdx / Math.sqrt(mDistSq)) * mForce : 0);
-    p.vy += dy * 0.038
-          + Math.cos(t * 0.0006 + p.phase + 1) * 0.28
-          + (mDistSq > 0 ? (mdy / Math.sqrt(mDistSq)) * mForce : 0);
-
+    p.vx += dx * 0.038 + Math.sin(t * 0.0008 + p.phase) * 0.28 + (mdx / mDist) * mForce;
+    p.vy += dy * 0.038 + Math.cos(t * 0.0006 + p.phase + 1) * 0.28 + (mdy / mDist) * mForce;
     p.vx *= 0.87; p.vy *= 0.87;
     p.x  += p.vx * p.spd;
     p.y  += p.vy * p.spd;
 
-    const alpha = 0.45 + p.lum * 0.5;
     vCtx.beginPath();
     vCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-    vCtx.fillStyle = `rgba(${p.r},${p.g},${p.b},${alpha})`;
+    vCtx.fillStyle = `rgba(${p.r},${p.g},${p.b},${0.45 + p.lum * 0.5})`;
     vCtx.fill();
   }
 
@@ -207,14 +195,15 @@ function rgbToHsl(r, g, b) {
   return [h * 360, s * 100, l * 100];
 }
 
-function colorDist(a, b) {
+function colorDistSq(a, b) {
   return (a[0]-b[0])**2 + (a[1]-b[1])**2 + (a[2]-b[2])**2;
 }
 
 function kMeans(pixels, k = 8, iters = 18) {
   const step = Math.max(1, Math.floor(pixels.length / k));
   let centroids = [];
-  for (let i = 0; i < k; i++) centroids.push([...pixels[Math.min(i * step, pixels.length - 1)]]);
+  for (let i = 0; i < k; i++)
+    centroids.push([...pixels[Math.min(i * step, pixels.length - 1)]]);
 
   const assignments = new Int32Array(pixels.length);
 
@@ -222,13 +211,13 @@ function kMeans(pixels, k = 8, iters = 18) {
     for (let i = 0; i < pixels.length; i++) {
       let best = 0, bestD = Infinity;
       for (let c = 0; c < k; c++) {
-        const d = colorDist(pixels[i], centroids[c]);
+        const d = colorDistSq(pixels[i], centroids[c]);
         if (d < bestD) { bestD = d; best = c; }
       }
       assignments[i] = best;
     }
-    const sums  = Array.from({ length: k }, () => [0, 0, 0]);
-    const cnts  = new Int32Array(k);
+    const sums = Array.from({ length: k }, () => [0,0,0]);
+    const cnts = new Int32Array(k);
     for (let i = 0; i < pixels.length; i++) {
       const c = assignments[i];
       sums[c][0] += pixels[i][0];
@@ -236,9 +225,8 @@ function kMeans(pixels, k = 8, iters = 18) {
       sums[c][2] += pixels[i][2];
       cnts[c]++;
     }
-    for (let c = 0; c < k; c++) {
+    for (let c = 0; c < k; c++)
       if (cnts[c]) centroids[c] = sums[c].map(v => v / cnts[c]);
-    }
   }
 
   const cnts2 = new Int32Array(k);
@@ -253,17 +241,14 @@ function kMeans(pixels, k = 8, iters = 18) {
 function analyzeImage(data, iW, iH) {
   const sampled = [];
   for (let i = 0; i < data.length; i += 4 * 7) {
-    const a = data[i+3];
-    if (a < 128) continue;
+    if (data[i+3] < 128) continue;
     sampled.push([data[i], data[i+1], data[i+2]]);
   }
 
-  const clusters = kMeans(sampled, 8);
-  const total    = sampled.length;
-
-  const hueBuckets = { Red:0, Orange:0, Yellow:0, Green:0, Cyan:0, Blue:0, Purple:0, Pink:0, Neutral:0 };
-  let dark = 0, mid = 0, bright = 0;
-  let totalSat = 0;
+  const clusters    = kMeans(sampled, 8);
+  const total       = sampled.length;
+  const hueBuckets  = { Red:0, Orange:0, Yellow:0, Green:0, Cyan:0, Blue:0, Purple:0, Pink:0, Neutral:0 };
+  let dark = 0, mid = 0, bright = 0, totalSat = 0;
   const uniqueSet = new Set();
 
   for (const [r, g, b] of sampled) {
@@ -307,7 +292,7 @@ function renderPalette(clusters, total) {
     const hex = '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
 
     const sw  = document.createElement('div');
-    sw.className       = 'swatch';
+    sw.className        = 'swatch';
     sw.style.background = hex;
     const tip           = document.createElement('span');
     tip.className       = 'swatch-tip';
@@ -331,8 +316,7 @@ function renderPalette(clusters, total) {
 }
 
 function renderHueChart(hueBuckets) {
-  const dpr = devicePixelRatio;
-  const W   = 260, H = 90;
+  const dpr = devicePixelRatio, W = 260, H = 90;
   hueChart.width  = W * dpr;
   hueChart.height = H * dpr;
   const ctx = hueChart.getContext('2d');
@@ -349,11 +333,9 @@ function renderHueChart(hueBuckets) {
 
   entries.forEach(([name, val], i) => {
     const bh = Math.max(2, (val / maxVal) * (H - 20));
-    const x  = 4 + i * bw;
-    const y  = H - 16 - bh;
+    const x  = 4 + i * bw, y = H - 16 - bh;
     const c  = hueColor[name] || '#fff';
-
-    const g = ctx.createLinearGradient(0, y, 0, H - 16);
+    const g  = ctx.createLinearGradient(0, y, 0, H - 16);
     g.addColorStop(0, c);
     g.addColorStop(1, c + '44');
     ctx.fillStyle = g;
@@ -367,23 +349,20 @@ function renderHueChart(hueBuckets) {
 }
 
 function renderBrightChart({ dark, mid, bright }) {
-  const dpr = devicePixelRatio;
-  const W   = 260, H = 90;
+  const dpr = devicePixelRatio, W = 260, H = 90;
   brightChart.width  = W * dpr;
   brightChart.height = H * dpr;
   const ctx = brightChart.getContext('2d');
   ctx.scale(dpr, dpr);
 
-  const total  = dark + mid + bright || 1;
-  const vals   = [dark, mid, bright];
-  const labels = ['Shadows','Midtones','Highlights'];
-  const cols   = [['#2a2446','#3b3860'], ['#5042cc','#7c6cfc'], ['#9088e0','#b3aaff']];
-  const bw     = (W - 8) / 3;
+  const total = dark + mid + bright || 1;
+  const vals  = [dark, mid, bright];
+  const cols  = [['#2a2446','#3b3860'],['#5042cc','#7c6cfc'],['#9088e0','#b3aaff']];
+  const bw    = (W - 8) / 3;
 
   vals.forEach((val, i) => {
     const bh = Math.max(2, (val / total) * (H - 20));
-    const x  = 4 + i * bw;
-    const y  = H - 16 - bh;
+    const x  = 4 + i * bw, y = H - 16 - bh;
     const g  = ctx.createLinearGradient(0, y, 0, H - 16);
     g.addColorStop(0, cols[i][1]);
     g.addColorStop(1, cols[i][0]);
@@ -392,56 +371,68 @@ function renderBrightChart({ dark, mid, bright }) {
     ctx.roundRect(x + 5, y, bw - 10, bh, [4, 4, 0, 0]);
     ctx.fill();
 
-    const pct = Math.round(val / total * 100);
-    ctx.fillStyle = 'rgba(200,212,255,0.55)';
-    ctx.font = `${10 * dpr / dpr}px Inter, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.fillText(pct + '%', x + bw / 2, y - 4);
+    ctx.fillStyle  = 'rgba(200,212,255,0.55)';
+    ctx.font       = '10px Inter,sans-serif';
+    ctx.textAlign  = 'center';
+    ctx.fillText(Math.round(val / total * 100) + '%', x + bw / 2, y - 4);
   });
 }
 
 function renderStats({ w, h, uniqueColors, avgSat, total }) {
-  const rows = [
-    ['Dimensions',      `${w} × ${h}`],
-    ['Pixels sampled',  total.toLocaleString()],
-    ['Unique colors',   `~${uniqueColors.toLocaleString()}`],
-    ['Avg saturation',  `${Math.round(avgSat)}%`],
-    ['Aspect ratio',    (w / h).toFixed(2)],
-  ];
-  statsList.innerHTML = rows.map(([lbl, val]) => `
-    <li><span class="s-label">${lbl}</span><span class="s-val">${val}</span></li>
-  `).join('');
+  statsList.innerHTML = [
+    ['Dimensions',     `${w} × ${h}`],
+    ['Pixels sampled', total.toLocaleString()],
+    ['Unique colors',  `~${uniqueColors.toLocaleString()}`],
+    ['Avg saturation', `${Math.round(avgSat)}%`],
+    ['Aspect ratio',   (w / h).toFixed(2)],
+  ].map(([l, v]) => `<li><span class="s-label">${l}</span><span class="s-val">${v}</span></li>`).join('');
 }
 
 // ─────────────────────────────────────────────
-// PROGRESS BAR
+// PROGRESS HELPERS
 // ─────────────────────────────────────────────
 
-function tick() {
-  return new Promise(r => setTimeout(r, 0));
+// Yields to the browser so it can repaint before continuing
+function frame() {
+  return new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
 }
 
-async function setProgress(pct, label) {
-  procFill.style.width  = pct + '%';
-  procPct.textContent   = pct + '%';
-  procLabel.textContent = label;
-  await tick();          // yield so the browser can repaint
+function setProgress(pct, label) {
+  ldFill.style.width  = pct + '%';
+  ldPct.textContent   = pct + '%';
+  ldLabel.textContent = label;
 }
 
 // ─────────────────────────────────────────────
-// PAGE TRANSITIONS
+// PAGE FLOW
 // ─────────────────────────────────────────────
 
-async function processAndShowPage2(file) {
-  // Switch drop zone to processing UI
-  dzIdle.hidden      = true;
-  dzProcessing.hidden = false;
+async function handleFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  // Prevent double-firing
   fileInput.disabled = true;
 
-  await setProgress(5,  'Reading image…');
+  // ── Step 1: IMMEDIATELY switch to page 2 with loader visible ──
+  stopAurora();
+  page1.classList.add('is-hidden');
+  page2.classList.remove('is-hidden');
+  // Loader starts visible; cards & thumb start hidden
+  p2Loader.classList.remove('fade-out', 'is-gone');
+  cardsGrid.classList.remove('visible');
+  thumb.classList.remove('visible');
 
-  // Load image via object URL
+  setProgress(5, 'Loading image…');
+
+  // Give the browser two frames to paint the transition
+  await frame();
+  await frame();
+
+  // ── Step 2: Load the image ──
   const url = URL.createObjectURL(file);
+
+  // Show thumb as soon as the URL is ready (async — doesn't block)
+  thumb.src = url;
+
   const img = await new Promise((res, rej) => {
     const i = new Image();
     i.onload  = () => res(i);
@@ -449,9 +440,10 @@ async function processAndShowPage2(file) {
     i.src     = url;
   });
 
-  await setProgress(22, 'Sampling pixels…');
+  setProgress(22, 'Sampling pixels…');
+  await frame();
 
-  // Draw to offscreen canvas (max 600px on longest side)
+  // ── Step 3: Pixel data ──
   const off   = document.createElement('canvas');
   const scale = Math.min(1, 600 / Math.max(img.width, img.height));
   off.width   = Math.round(img.width  * scale);
@@ -459,91 +451,83 @@ async function processAndShowPage2(file) {
   off.getContext('2d').drawImage(img, 0, 0, off.width, off.height);
   const imgData = off.getContext('2d').getImageData(0, 0, off.width, off.height);
 
-  await setProgress(42, 'Analyzing colors…');
+  setProgress(40, 'Analysing colours…');
+  await frame();
 
+  // ── Step 4: Analysis (heavy — runs synchronously but loader is showing) ──
   const analysis = analyzeImage(imgData.data, img.width, img.height);
 
-  await setProgress(62, 'Building palette…');
+  setProgress(62, 'Building palette…');
+  await frame();
 
   renderPalette(analysis.clusters, analysis.total);
-
-  await setProgress(75, 'Rendering charts…');
-
   renderHueChart(analysis.hueBuckets);
   renderBrightChart(analysis.brightness);
   renderStats(analysis);
-  thumb.src = url;
 
-  await setProgress(88, 'Spawning particles…');
+  setProgress(80, 'Spawning particles…');
+  await frame();
 
+  // ── Step 5: Particle system ──
   initVisCanvas();
   particles = buildParticles(imgData.data, off.width, off.height);
 
-  await setProgress(100, 'Done!');
+  setProgress(100, 'Ready!');
+  await frame();
 
-  // Brief pause so user sees 100%
-  await new Promise(r => setTimeout(r, 320));
-
-  // Transition pages
-  stopAurora();
-  page1.classList.add('is-hidden');
-  page2.classList.remove('is-hidden');
-
+  // Start the vis loop
   visRunning = true;
   visRaf = requestAnimationFrame(drawVis);
 
-  // Reset upload zone for next time
-  setTimeout(() => {
-    dzIdle.hidden       = false;
-    dzProcessing.hidden = true;
-    fileInput.disabled  = false;
-    procFill.style.width = '0%';
-    fileInput.value = '';
-  }, 700);
+  // Show thumb + cards
+  thumb.classList.add('visible');
+  cardsGrid.classList.add('visible');
+
+  // Fade out and remove the loader
+  p2Loader.classList.add('fade-out');
+  p2Loader.addEventListener('transitionend', () => {
+    p2Loader.classList.add('is-gone');
+  }, { once: true });
+
+  // Re-enable input for next visit
+  fileInput.disabled = false;
+  fileInput.value    = '';
 }
 
 function showPage1() {
   visRunning = false;
   if (visRaf) { cancelAnimationFrame(visRaf); visRaf = null; }
   particles = [];
+  thumb.classList.remove('visible');
+  cardsGrid.classList.remove('visible');
 
   page2.classList.add('is-hidden');
   page1.classList.remove('is-hidden');
-
   startAurora();
 }
 
 // ─────────────────────────────────────────────
-// EVENT LISTENERS
+// EVENTS
 // ─────────────────────────────────────────────
 
-function handleFile(file) {
-  if (!file || !file.type.startsWith('image/')) return;
-  processAndShowPage2(file);
-}
-
-// Click to open file browser (but NOT when clicking the actual input)
-dropZone.addEventListener('click', (e) => {
-  if (e.target === fileInput) return;
-  fileInput.click();
+fileInput.addEventListener('change', () => {
+  const file = fileInput.files[0];
+  if (file) handleFile(file);
 });
 
-dropZone.addEventListener('keydown', e => {
-  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
-});
-
-fileInput.addEventListener('change', () => handleFile(fileInput.files[0]));
-
-dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-dropZone.addEventListener('drop', e => {
+// Drag-and-drop on the label/shell
+dzShell.addEventListener('dragover',  e => { e.preventDefault(); dzShell.classList.add('drag-over'); });
+dzShell.addEventListener('dragleave', () => dzShell.classList.remove('drag-over'));
+dzShell.addEventListener('drop', e => {
   e.preventDefault();
-  dropZone.classList.remove('drag-over');
-  handleFile(e.dataTransfer.files[0]);
+  dzShell.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
 });
 
 backBtn.addEventListener('click', showPage1);
 
+// Mouse / touch repulsion for particles
 document.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
 document.addEventListener('touchmove', e => {
   const t = e.touches[0];
@@ -552,7 +536,7 @@ document.addEventListener('touchmove', e => {
 
 window.addEventListener('resize', () => {
   initAurora();
-  if (!page2.classList.contains('is-hidden')) initVisCanvas();
+  if (visRunning) initVisCanvas();
 });
 
 // ─────────────────────────────────────────────
