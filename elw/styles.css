@@ -22,10 +22,15 @@ html, body {
   font-size: clamp(48px, 8vw, 96px);
   font-weight: 900;
   text-transform: uppercase;
-  letter-spacing: -0.07em;
+  letter-spacing: -0.11em;
   line-height: 1;
   margin-bottom: 10px;
   user-select: none;
+}
+
+/* Pull hyphen tightly against adjacent letters */
+.logotype .hyphen {
+  margin: 0 -0.04em;
 }
 
 .logotype .red   { color: #e8000d; }
@@ -34,5 +39,4 @@ html, body {
 /* ── Canvas ────────────────────────────────── */
 #canvas {
   display: block;
-  /* sized by JS to fit viewport */
 }
