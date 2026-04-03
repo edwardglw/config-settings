@@ -36,12 +36,3 @@ html, body {
   display: block;
   /* sized by JS to fit viewport */
 }
-
-/* ── Hint ──────────────────────────────────── */
-.hint {
-  margin-top: 12px;
-  font-family: monospace;
-  font-size: 11px;
-  color: rgba(255,255,255,0.2);
-  letter-spacing: 0.05em;
-}
