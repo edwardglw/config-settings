@@ -1,15 +1,2854 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>config-settings — redesign prototype</title>
-  <style>
-    body { font-family: system-ui, sans-serif; margin: 2rem; }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>makedesignMD — image to DESIGN.md</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=JetBrains+Mono:wght@100..800&display=swap" rel="stylesheet">
+<style>
+/* ─────────────────────────────────────────────────────────
+   App chrome. Deliberately quiet so the generated system
+   is the loudest thing on screen. Accent, radius and motion
+   are overwritten live by the generated tokens — "the
+   interface wears the system it's describing".
+   ───────────────────────────────────────────────────────── */
+:root{
+  --bg:#0c0d0f; --bg-2:#121316; --bg-3:#191b1f;
+  --line:#26282d; --line-2:#33363c;
+  --ink:#f2f3f5; --ink-2:#a3a7ae; --ink-3:#6b7078;
+  --accent:#7c6cfc; --accent-2:#38bdf8;
+  --r:14px; --r-sm:8px;
+  --ui:'Inter',system-ui,-apple-system,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+  --dur:.24s; --ease:cubic-bezier(.2,0,0,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--ui);
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+button,input,select{font:inherit;color:inherit}
+button{background:none;border:none;cursor:pointer}
+
+/* 2.4.7 Focus Visible + 1.4.11 non-text contrast.
+   `tertiary` is guaranteed ≥4.5:1 against both grounds, comfortably over the
+   3:1 a focus indicator needs. The offset keeps the ring off the control's
+   own edge so it stays visible on filled buttons. */
+:focus-visible{
+  outline:3px solid var(--s-accent, var(--accent));
+  outline-offset:2px;
+  border-radius:2px;
+}
+#dashboard :focus-visible{outline-color:var(--s-accent)}
+
+/* 2.5.5 Target Size — the HIT AREA is 44×44, the VISUAL size is a token.
+   Forcing min-height:44px on the element itself was the wrong fix: it made
+   every button the same size and took the control away. An invisible
+   pseudo-element carries the target instead, so a 26px button is still
+   comfortably reachable. */
+.tap{position:relative}
+.tap::before{
+  content:'';position:absolute;left:50%;top:50%;
+  transform:translate(-50%,-50%);
+  width:100%;min-width:44px;height:100%;min-height:44px;
+}
+
+/* 2.3.3 — we preach reduced motion in the export, so honour it here. */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    animation-duration:.01ms !important; animation-iteration-count:1 !important;
+    transition-duration:.01ms !important; scroll-behavior:auto !important;
+  }
+}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:99px}
+::-webkit-scrollbar-track{background:transparent}
+
+.mono{font-family:var(--mono);font-size:.78rem;letter-spacing:-.01em}
+.eyebrow{
+  font-family:var(--mono); font-size:.68rem; text-transform:uppercase;
+  letter-spacing:.12em; color:var(--ink-3);
+}
+.screen{display:none}
+.screen.on{display:block}
+
+/* ── Landing ───────────────────────────────────────────── */
+.wrap{max-width:1180px;margin:0 auto;padding:0 clamp(16px,4vw,40px)}
+
+.masthead{padding:clamp(48px,9vh,104px) 0 clamp(28px,5vh,52px)}
+.masthead h1{
+  font-size:clamp(2.1rem,6.4vw,4.1rem); font-weight:600;
+  letter-spacing:-.035em; line-height:1.02; max-width:16ch;
+}
+.masthead h1 em{
+  font-style:normal;
+  background:linear-gradient(96deg,var(--accent),var(--accent-2));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.masthead p{
+  color:var(--ink-2); max-width:56ch; margin-top:20px;
+  font-size:clamp(.95rem,1.6vw,1.08rem);
+}
+.masthead .eyebrow{margin-bottom:20px}
+
+.bar{
+  display:flex; flex-wrap:wrap; gap:16px; align-items:center;
+  padding:22px 0 30px; border-bottom:1px solid var(--line);
+}
+.up-btn{
+  display:inline-flex;align-items:center;gap:10px;
+  background:var(--ink); color:#0c0d0f; font-weight:600; font-size:.92rem;
+  padding:13px 22px; border-radius:var(--r-sm); min-height:46px;
+  transition:transform var(--dur) var(--ease), opacity var(--dur) var(--ease);
+}
+.up-btn:hover{transform:translateY(-1px)}
+.up-btn:active{transform:translateY(0)}
+.up-btn svg{width:17px;height:17px}
+#file{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.session-note{
+  display:flex;align-items:center;gap:8px;
+  color:var(--ink-3); font-size:.82rem;
+}
+.session-note svg{width:14px;height:14px;flex:none;opacity:.7}
+
+/* ── Paired tiles ──────────────────────────────────────── */
+.grid{
+  display:grid; gap:clamp(18px,2.6vw,30px);
+  grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));
+  padding:34px 0 90px;
+}
+.sect-head{display:flex;align-items:baseline;gap:12px;padding-top:34px}
+.sect-head .count{color:var(--ink-3);font-size:.78rem;font-family:var(--mono)}
+
+.tile{text-align:left;width:100%;display:block;transition:transform var(--dur) var(--ease)}
+.tile:hover{transform:translateY(-3px)}
+.tile:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:var(--r)}
+/* the paired frame — source and output at identical size */
+.pair{
+  display:grid; grid-template-columns:1fr 1fr; gap:2px;
+  background:var(--line); border:1px solid var(--line);
+  border-radius:var(--r); overflow:hidden;
+}
+.pane{aspect-ratio:1/1;background:var(--bg-2);position:relative;overflow:hidden}
+.pane img{width:100%;height:100%;object-fit:cover;display:block}
+.pane canvas{width:100%;height:100%;display:block}
+/* palette strip along the bottom of the output pane */
+.strip{position:absolute;left:0;right:0;bottom:0;height:15%;display:flex}
+.strip i{flex:1;display:block}
+.tile-meta{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding-top:11px}
+.tile-name{font-weight:550;font-size:.94rem;letter-spacing:-.01em}
+.tile-sub{color:var(--ink-3);font-size:.72rem;font-family:var(--mono)}
+
+/* empty seed slots — awaiting the 8 real images */
+.pane.empty{
+  display:grid;place-items:center;
+  background:
+    repeating-linear-gradient(45deg,transparent,transparent 7px,rgba(255,255,255,.018) 7px,rgba(255,255,255,.018) 14px),
+    var(--bg-2);
+}
+.pane.empty span{
+  font-family:var(--mono);font-size:.6rem;text-transform:uppercase;
+  letter-spacing:.1em;color:var(--ink-3);opacity:.55;text-align:center;padding:0 8px;
+}
+.pane-wait{
+  position:absolute;inset:0;display:grid;place-items:center;background:var(--bg-2);
+}
+.pane-wait span{
+  font-family:var(--mono);font-size:.6rem;text-transform:uppercase;
+  letter-spacing:.1em;color:var(--ink-3);opacity:.6;
+}
+.tile.placeholder{pointer-events:none}
+.tile.placeholder .tile-name{color:var(--ink-3);font-weight:400}
+
+/* drop state */
+body.dragging::after{
+  content:'Drop to generate';
+  position:fixed;inset:14px;z-index:99;
+  border:2px dashed var(--accent);border-radius:var(--r);
+  background:rgba(12,13,15,.86);backdrop-filter:blur(3px);
+  display:grid;place-items:center;
+  font-family:var(--mono);font-size:.85rem;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--accent);
+  pointer-events:none;
+}
+
+/* ── Dashboard ─────────────────────────────────────────
+   Page 2 is styled BY the system it generates. Every value
+   below resolves to a token from the exported DESIGN.md —
+   surface, on-surface, primary, tertiary, the spacing scale,
+   the radius scale, the motion durations and the chosen
+   typeface. Change the image and this page changes with it.
+   ───────────────────────────────────────────────────────── */
+#dashboard{
+  /* fallbacks only — applySystem() overwrites all of these */
+  --s-bg:#fff; --s-panel:#f4f4f5; --s-ink-rgb:20,20,22;
+  --s-primary:#333; --s-accent:#7c6cfc; --s-secondary:#777;
+  --s-r:12px; --s-r-sm:6px; --s-r-lg:20px;
+  --s-pad:20px; --s-gap:10px;
+  --s-dur:200ms; --s-ease:cubic-bezier(.2,0,0,1);
+  --s-font:var(--ui); --s-label:var(--mono);
+  --s-ink:rgb(var(--s-ink-rgb));
+  --s-ink-2:rgba(var(--s-ink-rgb),.66);
+  --s-ink-3:rgba(var(--s-ink-rgb),.44);
+  --s-line:rgba(var(--s-ink-rgb),.13);
+  --s-line-soft:rgba(var(--s-ink-rgb),.07);
+  background:var(--s-bg); color:var(--s-ink);
+  font-family:var(--s-font);
+  min-height:100vh;
+}
+/* The generated pattern sits behind the whole page, quietly. It is the
+   same renderer that fills the gallery tile — so the page literally wears
+   the motif taken from its own source image. */
+#bg-pattern{
+  position:fixed;inset:0;width:100%;height:100%;
+  z-index:0;pointer-events:none;opacity:.16;
+  transition:opacity var(--s-dur) var(--s-ease);
+}
+.dash,.topbar{position:relative;z-index:1}
+#dashboard .eyebrow{font-family:var(--s-label);color:var(--s-ink-3)}
+#dashboard .mono{font-family:var(--s-label)}
+
+.topbar{
+  position:sticky;top:0;z-index:20;
+  display:flex;align-items:center;gap:var(--s-gap);flex-wrap:wrap;
+  padding:calc(var(--s-pad)*.6) var(--s-pad);
+  background:color-mix(in srgb, var(--s-bg) 88%, transparent);
+  backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--s-line);
+}
+.back{
+  display:inline-flex;align-items:center;gap:7px;
+  color:var(--s-ink-2);font-size:.86rem;padding:8px 14px;margin-left:-14px;
+  border-radius:var(--s-r-sm);height:var(--s-btn-h,44px);
+  transition:color var(--s-dur) var(--s-ease),background var(--s-dur) var(--s-ease);
+}
+.back:hover{color:var(--s-ink);background:var(--s-panel)}
+.back svg{width:15px;height:15px}
+.sys-name{font-weight:600;letter-spacing:-.015em;font-size:1.02rem}
+.sys-tags{display:flex;gap:6px;flex-wrap:wrap}
+.tag{
+  font-family:var(--s-label);font-size:.63rem;text-transform:uppercase;letter-spacing:.09em;
+  padding:4px 9px;border-radius:var(--s-r-sm);background:var(--s-panel);color:var(--s-ink-2);
+  border:1px solid var(--s-line);
+}
+.topbar .spacer{flex:1}
+.export-btn{
+  background:var(--s-accent);color:var(--s-bg);font-weight:600;font-size:.86rem;
+  padding:var(--s-btn-pad,12px 18px);border-radius:var(--s-r-sm);
+  height:var(--s-btn-h,44px);display:inline-flex;align-items:center;justify-content:center;
+  font-family:var(--s-font);
+  transition:filter var(--s-dur) var(--s-ease),transform var(--s-dur) var(--s-ease);
+}
+.export-btn:hover{filter:brightness(1.1);transform:translateY(-1px)}
+
+.dash{
+  display:grid;
+  grid-template-columns:minmax(230px,300px) minmax(0,1fr) minmax(240px,320px);
+  min-height:calc(100vh - 61px);
+}
+.col{padding:var(--s-pad);min-width:0;background:color-mix(in srgb, var(--s-bg) 90%, transparent)}
+.col + .col{border-inline-start:1px solid var(--s-line)}
+.col-src,.col-lev{position:sticky;top:61px;align-self:start;max-height:calc(100vh - 61px);overflow-y:auto}
+.col-src{background:color-mix(in srgb, var(--s-panel) 88%, transparent)}
+@media (max-width:1080px){
+  .dash{grid-template-columns:1fr}
+  .col-src,.col-lev{position:static;max-height:none}
+}
+
+.src-img{
+  width:100%;aspect-ratio:1/1;object-fit:cover;
+  border-radius:var(--s-r);border:1px solid var(--s-line);display:block;
+}
+.sw-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:calc(var(--s-gap)*.7);margin-top:var(--s-gap)}
+.sw{
+  aspect-ratio:1/1;border-radius:var(--s-r-sm);border:1px solid var(--s-secondary);
+  position:relative;min-height:44px;
+  transition:transform var(--s-dur) var(--s-ease),opacity var(--s-dur) var(--s-ease);
+}
+.sw:hover{transform:scale(1.06)}
+.sw.off{opacity:.22}
+.sw.off::after{
+  content:'';position:absolute;inset:0;border-radius:inherit;
+  background:linear-gradient(45deg,transparent 46%,var(--s-ink) 46%,var(--s-ink) 54%,transparent 54%);
+  opacity:.55;
+}
+.src-note{color:var(--s-ink-3);font-size:.74rem;margin-top:11px;line-height:1.45}
+
+/* token groups */
+.group{border-bottom:1px solid var(--s-line);padding:0 0 var(--s-pad);margin-bottom:var(--s-pad)}
+.group:last-child{border-bottom:none}
+.group > .eyebrow{margin-bottom:14px;display:block}
+.tok{
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 14px;
+  align-items:center;padding:8px 0;border-bottom:1px solid var(--s-line-soft);
+}
+.tok:last-child{border-bottom:none}
+.tok-k{font-family:var(--s-label);font-size:.76rem;color:var(--s-ink-2)}
+.tok-v{font-family:var(--s-label);font-size:.76rem;text-align:right;white-space:nowrap;color:var(--s-ink)}
+.tok-why{grid-column:1/-1;color:var(--s-ink-3);font-size:.73rem;line-height:1.45}
+.tok-why b{color:var(--s-ink-2);font-weight:600}
+
+.type-row{display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid var(--s-line-soft);flex-wrap:wrap}
+.type-row:last-child{border-bottom:none}
+.type-spec{font-family:var(--s-label);font-size:.68rem;color:var(--s-ink-3);white-space:nowrap;margin-left:auto}
+.type-sample{line-height:1.15;min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--s-ink)}
+
+.font-card{
+  border:1px solid var(--s-line);border-radius:var(--s-r);padding:var(--s-pad);
+  margin-bottom:var(--s-gap);background:var(--s-panel);
+}
+.font-card .fc-top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.font-card .fc-name{font-size:1.5rem;letter-spacing:-.02em;line-height:1.1}
+.font-swap{
+  background:var(--s-accent);color:var(--s-bg);
+  font-family:var(--s-font);font-size:.78rem;font-weight:600;
+  border-radius:var(--s-r-sm);padding:var(--s-btn-pad,9px 18px);margin-left:auto;
+  height:var(--s-btn-h,44px);display:inline-flex;align-items:center;
+  transition:filter var(--s-dur) var(--s-ease),transform var(--s-dur) var(--s-ease);
+}
+.font-swap:hover{filter:brightness(1.1);transform:translateY(-1px)}
+.font-swap:active{transform:translateY(0)}
+
+.lev-group{
+  margin-top:var(--s-gap);padding:var(--s-gap) 0 0;
+  border-top:1px solid var(--s-line);
+}
+.lev-group > .eyebrow{display:block;margin-bottom:2px}
+.shape-pick{display:flex;flex-wrap:wrap;gap:6px}
+.shape-pick button{
+  font-family:var(--s-label);font-size:.7rem;
+  padding:var(--s-chip-pad,6px 12px);height:var(--s-chip-h,32px);
+  display:inline-flex;align-items:center;
+  border-radius:var(--s-r-sm);
+  border:1px solid var(--s-secondary);color:var(--s-ink-2);
+  transition:all var(--s-dur) var(--s-ease);
+}
+.shape-pick button:hover{color:var(--s-ink);border-color:var(--s-ink-3)}
+.shape-pick button.inferred{border-color:var(--s-accent);border-width:2px;color:var(--s-ink)}
+/* the inferred choice is marked with a glyph as well as a border — 1.4.1,
+   colour is never the only carrier of meaning */
+.shape-pick button.inferred::after{content:' ·';font-weight:700}
+.shape-pick button.on{background:var(--s-accent);color:var(--s-bg);border-color:var(--s-accent);font-weight:600}
+
+.pat-wrap{border:1px solid var(--s-line);border-radius:var(--s-r);overflow:hidden;background:var(--s-panel)}
+#pat-big{width:100%;aspect-ratio:2/1;display:block}
+
+.pill{font-family:var(--s-label);font-size:.62rem;padding:3px 7px;border-radius:var(--s-r-sm);border:1px solid currentColor}
+.pill.pass{color:#15803d}
+.pill.warn{color:#a16207}
+.pill.fail{color:#b91c1c}
+
+/* levers */
+.lever{padding:15px 0;border-bottom:1px solid var(--s-line-soft)}
+.lever:last-of-type{border-bottom:none}
+.lev-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:9px}
+.lev-name{font-size:.87rem;font-weight:600;color:var(--s-ink)}
+.lev-val{font-family:var(--s-label);font-size:.7rem;color:var(--s-accent)}
+.lev-ends{display:flex;justify-content:space-between;font-family:var(--s-label);font-size:.62rem;color:var(--s-ink-3);margin-top:6px;text-transform:uppercase;letter-spacing:.06em}
+#dashboard input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:44px;background:transparent;cursor:pointer}
+#dashboard input[type=range]::-webkit-slider-runnable-track{height:4px;background:var(--s-secondary);border-radius:99px}
+#dashboard input[type=range]::-moz-range-track{height:4px;background:var(--s-secondary);border-radius:99px}
+#dashboard input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+  background:var(--s-accent);margin-top:-7px;border:2px solid var(--s-bg);
+  transition:transform var(--s-dur) var(--s-ease);
+}
+#dashboard input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--s-accent);border:2px solid var(--s-bg)}
+#dashboard input[type=range]:active::-webkit-slider-thumb{transform:scale(1.22)}
+.lev-note{color:var(--s-ink-3);font-size:.71rem;line-height:1.45;margin-top:8px}
+
+.a11y-box{margin-top:var(--s-gap);border:1px solid var(--s-line);border-radius:var(--s-r-sm);padding:12px;background:var(--s-panel)}
+.a11y-box .eyebrow{display:block;margin-bottom:7px}
+.a11y-row{display:flex;justify-content:space-between;gap:10px;font-family:var(--s-label);font-size:.7rem;padding:3px 0;color:var(--s-ink)}
+.a11y-row span:last-child{color:var(--s-ink-2)}
+.a11y-why{color:var(--s-ink-3);font-size:.69rem;line-height:1.4;margin-top:8px}
+
+.reset{
+  width:100%;margin-top:var(--s-gap);border:1px solid var(--s-line);border-radius:var(--s-r-sm);
+  padding:var(--s-btn-pad,11px);font-size:.8rem;color:var(--s-ink-2);
+  height:var(--s-btn-h,44px);font-family:var(--s-font);
+  transition:color var(--s-dur) var(--s-ease),border-color var(--s-dur) var(--s-ease);
+}
+.reset:hover{color:var(--s-ink);border-color:var(--s-ink-3)}
+
+/* a strip of live component previews, built from the tokens */
+.demo{display:flex;flex-wrap:wrap;gap:var(--s-gap);align-items:center;margin-bottom:14px}
+.demo-btn{
+  background:var(--s-primary);color:var(--s-bg);border-radius:var(--s-r-sm);
+  padding:var(--s-btn-pad,11px 16px);font-family:var(--s-font);font-size:.85rem;
+  height:var(--s-btn-h,44px);display:inline-flex;align-items:center;justify-content:center;
+  transition:background var(--s-dur) var(--s-ease),transform var(--s-dur) var(--s-ease);
+}
+.demo-btn:hover{background:var(--s-accent);transform:translateY(-1px)}
+.demo-btn.ghost2{background:transparent;color:var(--s-ink);border:1px solid var(--s-secondary)}
+.demo-card{
+  border:1px solid var(--s-line);border-radius:var(--s-r-lg);padding:var(--s-pad);
+  background:var(--s-panel);flex:1;min-width:190px;
+}
+.demo-card h4{font-size:1.05rem;margin-bottom:4px;color:var(--s-ink)}
+.demo-card p{font-size:.8rem;color:var(--s-ink-2);line-height:1.5}
+
+/* ── Export sheet ──────────────────────────────────────── */
+.sheet{
+  position:fixed;inset:0;z-index:60;display:none;
+  background:rgba(6,7,8,.72);backdrop-filter:blur(6px);
+  padding:clamp(12px,4vh,44px);
+}
+.sheet.on{display:grid;place-items:center}
+.sheet-inner{
+  width:min(880px,100%);max-height:100%;display:flex;flex-direction:column;
+  background:var(--bg-2);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;
+}
+.sheet-head{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.sheet-head h2{font-size:1rem;font-weight:600}
+.sheet-head .spacer{flex:1}
+.lint{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:.68rem;color:#4ade80}
+.lint svg{width:13px;height:13px;flex:none}
+pre#md-out{
+  flex:1;overflow:auto;margin:0;padding:20px;
+  font-family:var(--mono);font-size:.72rem;line-height:1.65;color:var(--ink-2);
+  white-space:pre-wrap;word-break:break-word;
+}
+.sheet-foot{display:flex;gap:10px;padding:14px 20px;border-top:1px solid var(--line);flex-wrap:wrap}
+.ghost{
+  border:1px solid var(--line);border-radius:var(--r-sm);padding:11px 18px;
+  font-size:.86rem;color:var(--ink-2);min-height:44px;
+  transition:color var(--dur) var(--ease),border-color var(--dur) var(--ease);
+}
+.ghost:hover{color:var(--ink);border-color:var(--line-2)}
+
+/* ── Loader ────────────────────────────────────────────── */
+.loader{position:fixed;inset:0;z-index:80;display:none;place-items:center;background:var(--bg)}
+.loader.on{display:grid}
+.loader .lb{width:min(260px,60vw);height:2px;background:var(--line);border-radius:99px;overflow:hidden;margin-top:18px}
+.loader .lf{height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .18s linear}
+.loader p{font-family:var(--mono);font-size:.74rem;color:var(--ink-3);text-align:center}
+
+@media (max-width:620px){
+  .topbar .sys-tags{display:none}
+}
+</style>
 </head>
 <body>
-  <h1>Redesign prototype</h1>
-  <p>Placeholder — build out the new concept here.</p>
+
+<!-- ═══════════════════ LANDING ═══════════════════ -->
+<section id="landing" class="screen on">
+  <div class="wrap">
+    <header class="masthead">
+      <div class="eyebrow">makedesignMD · prototype</div>
+      <h1>An image in,<br>a <em>DESIGN.md</em> out.</h1>
+      <p>
+        Upload an image and it becomes a design system — palette, type, shape,
+        spacing, motion and a generated pattern. Tune it with five levers, then
+        export a spec-conformant <span class="mono">DESIGN.md</span> that any
+        coding agent can build from.
+      </p>
+    </header>
+
+    <div class="bar">
+      <button class="up-btn tap" id="up1">
+        <svg viewBox="0 0 22 22" fill="none">
+          <path d="M11 3v12M5 8l6-6 6 6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M3 18h16" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" opacity=".4"/>
+        </svg>
+        Upload an image
+      </button>
+      <input id="file" type="file" accept="image/*" aria-label="Upload an image to generate a design system" tabindex="-1" />
+      <div class="session-note">
+        <svg viewBox="0 0 16 16" fill="none">
+          <circle cx="8" cy="8" r="6.4" stroke="currentColor" stroke-width="1.3"/>
+          <path d="M8 5v3.4L10 10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        </svg>
+        Uploads stay in this session only — nothing is stored. Export before you close the tab.
+      </div>
+    </div>
+
+    <div id="mine-head" class="sect-head" style="display:none">
+      <span class="eyebrow">Your session</span>
+      <span class="count" id="mine-count"></span>
+    </div>
+    <div class="grid" id="mine" style="display:none"></div>
+
+    <div class="sect-head">
+      <span class="eyebrow">Starting points</span>
+      <span class="count">8 examples · analysed live, not pre-baked</span>
+    </div>
+    <div class="grid" id="seeds"></div>
+  </div>
+</section>
+
+<!-- ═══════════════════ DASHBOARD ═══════════════════ -->
+<section id="dashboard" class="screen">
+  <canvas id="bg-pattern" aria-hidden="true" role="presentation"></canvas>
+  <div class="topbar">
+    <button class="back tap" id="back">
+      <svg viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Gallery
+    </button>
+    <div class="sys-name" id="sys-name">—</div>
+    <div class="sys-tags" id="sys-tags"></div>
+    <div class="spacer"></div>
+    <button class="export-btn tap" id="export">Export DESIGN.md</button>
+  </div>
+
+  <div class="dash">
+    <!-- LEFT — source -->
+    <div class="col col-src">
+      <span class="eyebrow" style="display:block;margin-bottom:12px">Source</span>
+      <img class="src-img" id="src-img" alt="Uploaded source image" />
+      <div class="sw-grid" id="sw-grid"></div>
+      <p class="src-note">Click a swatch to drop it from the palette. The system recomputes around what's left.</p>
+      <div style="margin-top:26px">
+        <span class="eyebrow" style="display:block;margin-bottom:12px">Read from image</span>
+        <div id="readout"></div>
+        <p class="src-note" id="focus-note"></p>
+      </div>
+    </div>
+
+    <!-- CENTRE — tokens -->
+    <div class="col col-tok" id="tokens"></div>
+
+    <!-- RIGHT — levers -->
+    <div class="col col-lev">
+      <span class="eyebrow" style="display:block;margin-bottom:6px">Levers</span>
+      <p class="lev-note" style="margin:0 0 6px">Coupled by design — each lever moves several tokens together so the system stays internally consistent.</p>
+      <div id="levers"></div>
+      <div class="a11y-box" id="a11y"></div>
+      <button class="reset tap" id="reset">Reset to image defaults</button>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ EXPORT SHEET ═══════════════════ -->
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" aria-hidden="true">
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <h2 id="sheet-title">DESIGN.md</h2>
+      <div class="lint" id="lint" role="status" aria-live="polite">
+        <svg viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3.2 3.2L13 5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span id="lint-msg">structure valid</span>
+      </div>
+      <div class="spacer"></div>
+      <button class="ghost tap" id="sheet-close" style="padding:10px 16px;min-height:44px">Close</button>
+    </div>
+    <pre id="md-out" tabindex="0" role="document" aria-label="Generated DESIGN.md preview"></pre>
+    <div class="sheet-foot">
+      <button class="export-btn tap" id="dl">Download DESIGN.md</button>
+      <button class="ghost tap" id="copy">Copy to clipboard</button>
+      <div class="spacer"></div>
+      <button class="ghost tap" id="dl-svg">Download pattern.svg</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ LOADER ═══════════════════ -->
+<div class="loader" id="loader" role="status" aria-live="polite" aria-hidden="true">
+  <div>
+    <p id="ld-msg">Reading image…</p>
+    <div class="lb"><div class="lf" id="ld-fill"></div></div>
+  </div>
+</div>
+
+<script src="seeds-data.js"></script>
+<script>
+'use strict';
+/* ══════════════════════════════════════════════════════════
+   makedesignMD prototype
+   Pipeline:  image → analysis → tokens → DESIGN.md
+   All client-side. No build step, no storage, no API keys.
+   ══════════════════════════════════════════════════════════ */
+
+const $  = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+
+const state = {
+  entries: [],        // session uploads, newest first
+  seeds:   [],        // the 8 shipped starting points
+  active:  null,
+  // tone/energy/speed/density are −1…+1 offsets from the image reading.
+  // curve/padding are absolute 0–100; null means "still following the image".
+  // shape is a manual override of the inferred pattern primitive.
+  levers:  {tone:0, energy:0, speed:0, curve:null, padding:null,
+            buttonSize:null, density:null, blur:null, opacity:null, shape:null},
+  dropped: new Set(), // rejected swatch indices
+};
+
+/* ── 1. COLOUR MATHS ─────────────────────────────────── */
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const lerp  = (a,b,t) => a + (b-a)*t;
+const round = (v,n=0) => { const p = 10**n; return Math.round(v*p)/p; };
+
+function rgbToHsl(r,g,b){
+  r/=255; g/=255; b/=255;
+  const mx=Math.max(r,g,b), mn=Math.min(r,g,b);
+  let h=0,s=0; const l=(mx+mn)/2;
+  if(mx!==mn){
+    const d=mx-mn;
+    s = l>.5 ? d/(2-mx-mn) : d/(mx+mn);
+    if(mx===r) h=((g-b)/d+(g<b?6:0))/6;
+    else if(mx===g) h=((b-r)/d+2)/6;
+    else h=((r-g)/d+4)/6;
+  }
+  return [h*360, s*100, l*100];
+}
+function hslToRgb(h,s,l){
+  h=((h%360)+360)%360; s=clamp(s,0,100)/100; l=clamp(l,0,100)/100;
+  const c=(1-Math.abs(2*l-1))*s, x=c*(1-Math.abs((h/60)%2-1)), m=l-c/2;
+  let r,g,b;
+  if(h<60)      [r,g,b]=[c,x,0];
+  else if(h<120)[r,g,b]=[x,c,0];
+  else if(h<180)[r,g,b]=[0,c,x];
+  else if(h<240)[r,g,b]=[0,x,c];
+  else if(h<300)[r,g,b]=[x,0,c];
+  else          [r,g,b]=[c,0,x];
+  return [Math.round((r+m)*255), Math.round((g+m)*255), Math.round((b+m)*255)];
+}
+const hex = ([r,g,b]) => '#' + [r,g,b].map(v=>clamp(Math.round(v),0,255).toString(16).padStart(2,'0')).join('');
+
+// WCAG relative luminance + contrast ratio
+function relLum([r,g,b]){
+  const f = v => { v/=255; return v<=.03928 ? v/12.92 : ((v+.055)/1.055)**2.4; };
+  return .2126*f(r) + .7152*f(g) + .0722*f(b);
+}
+function contrast(a,b){
+  const l1=relLum(a), l2=relLum(b);
+  return (Math.max(l1,l2)+.05)/(Math.min(l1,l2)+.05);
+}
+const rate = r => r>=7 ? ['AAA','pass'] : r>=4.5 ? ['AA','pass'] : r>=3 ? ['AA Large','warn'] : ['Fail','fail'];
+
+/* ── 2. K-MEANS (ported from analysis.js) ────────────── */
+function kMeans(px, k=8, iters=14){
+  if(!px.length) return [];
+  k = Math.min(k, px.length);
+  const step = Math.max(1, Math.floor(px.length/k));
+  let cent = Array.from({length:k},(_,i)=>[...px[Math.min(i*step, px.length-1)]]);
+  const asn = new Int32Array(px.length);
+  const d2 = (a,b)=>(a[0]-b[0])**2+(a[1]-b[1])**2+(a[2]-b[2])**2;
+
+  for(let it=0; it<iters; it++){
+    for(let i=0;i<px.length;i++){
+      let best=0,bd=Infinity;
+      for(let c=0;c<k;c++){ const d=d2(px[i],cent[c]); if(d<bd){bd=d;best=c;} }
+      asn[i]=best;
+    }
+    const sums=Array.from({length:k},()=>[0,0,0]), cnt=new Int32Array(k);
+    for(let i=0;i<px.length;i++){
+      const c=asn[i];
+      sums[c][0]+=px[i][0]; sums[c][1]+=px[i][1]; sums[c][2]+=px[i][2]; cnt[c]++;
+    }
+    for(let c=0;c<k;c++) if(cnt[c]) cent[c]=sums[c].map(v=>v/cnt[c]);
+  }
+  const cnt=new Int32Array(k);
+  for(let i=0;i<px.length;i++) cnt[asn[i]]++;
+  let out = cent.map((color,i)=>({color:color.map(Math.round), count:cnt[i]}))
+                .filter(e=>e.count>0)
+                .sort((a,b)=>b.count-a.count);
+
+  // Merge near-identical clusters. K-means happily returns #58c0fe and
+  // #57c1fe as two separate "colours", which then become primary and
+  // secondary — a palette with a duplicate in it.
+  const merged = [];
+  for(const c of out){
+    const near = merged.find(m => Math.sqrt(d2(m.color, c.color)) < 20);
+    if(near){
+      const t = c.count/(near.count + c.count);
+      near.color = near.color.map((v,i)=>Math.round(lerp(v, c.color[i], t)));
+      near.count += c.count;
+    } else merged.push({...c});
+  }
+  return merged.sort((a,b)=>b.count-a.count);
+}
+
+// Chroma, not HSL saturation. A near-white cream reads as "97% saturated"
+// in HSL, which is why an unweighted pick hands you an accent nobody can
+// see. Weighting by lightness distance from the extremes fixes it.
+function chroma(rgb){
+  const [,s,l] = rgbToHsl(...rgb);
+  return s * (1 - Math.abs(2*l - 100)/100);
+}
+
+/* ── 3. STRUCTURE — Sobel edge / angle detection ─────────
+   New work flagged in PLAN.md. Gives the pattern real
+   geometry instead of faking direction from hue like v4.  */
+function analyzeStructure(data, wFull, hFull){
+  const gFull = new Float32Array(wFull*hFull);
+  for(let i=0,p=0; i<data.length; i+=4, p++)
+    gFull[p] = (data[i]*.299 + data[i+1]*.587 + data[i+2]*.114)/255;
+
+  // Measure structure inside the subject region, not across the whole frame.
+  const focus = analyzeFocus(data, gFull, wFull, hFull);
+  const crop  = cropGray(gFull, wFull, hFull, focus);
+  const g = crop.g, w = crop.w, h = crop.h;
+
+  // Pass 1 — gradients. Store them so the threshold can adapt to the
+  // image rather than being a fixed constant. A soft radial gradient and
+  // a hard architectural edge live at completely different magnitudes;
+  // a fixed cut-off silently discards the whole of the former.
+  const N  = (w-2)*(h-2);
+  const gm = new Float32Array(N);
+  const ga = new Float32Array(N);
+  let magSum = 0, p = 0;
+
+  for(let y=1; y<h-1; y++){
+    for(let x=1; x<w-1; x++){
+      const i  = y*w+x;
+      const gx = -g[i-w-1] - 2*g[i-1] - g[i+w-1] + g[i-w+1] + 2*g[i+1] + g[i+w+1];
+      const gy = -g[i-w-1] - 2*g[i-w] - g[i-w+1] + g[i+w-1] + 2*g[i+w] + g[i+w+1];
+      const m  = Math.hypot(gx, gy);
+      gm[p] = m;
+      ga[p] = Math.atan2(gy, gx);
+      magSum += m; p++;
+    }
+  }
+
+  const meanMag = N ? magSum/N : 0;
+  // Adaptive: 0.9× the image's own mean gradient, with a small absolute
+  // floor so sensor noise in a flat image doesn't read as structure.
+  const thresh  = Math.max(0.012, meanMag * 0.9);
+
+  const BINS = 36;                        // 5° bins over 180° (edges are undirected)
+  const hist = new Float32Array(BINS);
+  let counted = 0;
+
+  for(let i=0;i<N;i++){
+    if(gm[i] < thresh) continue;
+    let a = ga[i]*180/Math.PI + 90;       // gradient direction +90° = edge direction
+    a = ((a % 180) + 180) % 180;
+    hist[Math.min(BINS-1, Math.floor(a/180*BINS))] += gm[i];
+    counted++;
+  }
+
+  const coverage = N ? counted/N : 0;
+
+  // A genuinely flat image has no structure to report. Say so, rather than
+  // dividing by an empty histogram and inventing a dominant angle.
+  if(coverage < 0.004 || meanMag < 0.004){
+    return {
+      dominantAngle:0, angularity:0, orthogonality:0, edgeDensity:0,
+      structured:false, coverage, peakCount:0, rectilinearity:0,
+      ...analyzeShape(g, w, h), ...focus,
+    };
+  }
+
+  const total = hist.reduce((s,v)=>s+v, 0);
+  let peak = 0;
+  for(let i=1;i<BINS;i++) if(hist[i] > hist[peak]) peak = i;
+
+  // angularity — how concentrated the histogram is.
+  // High → architectural, one strong direction. Low → organic, directionless.
+  const mean = total/BINS;
+  const varr = hist.reduce((s,v)=>s+(v-mean)**2, 0)/BINS;
+  const angularity = clamp(Math.sqrt(varr)/mean/2.2, 0, 1);
+
+  const dominant = (peak + .5) * (180/BINS);
+  const toOrtho  = Math.min(Math.abs(dominant), Math.abs(dominant-90), Math.abs(dominant-180))/45;
+
+  // ── how many distinct directions? ──
+  // One strong peak = stripes/bands. Two ≈90° apart = a grid. Many = scatter.
+  const sm = i => (hist[(i-1+BINS)%BINS] + 2*hist[i] + hist[(i+1)%BINS])/4;
+  const smoothed = Array.from({length:BINS}, (_,i)=>sm(i));
+  const hiMark = Math.max(...smoothed)*.55;
+  let peakCount = 0;
+  for(let i=0;i<BINS;i++){
+    const p=smoothed[(i-1+BINS)%BINS], c=smoothed[i], n=smoothed[(i+1)%BINS];
+    if(c>=hiMark && c>=p && c>n) peakCount++;
+  }
+
+  // ── rectilinearity ──
+  // Share of edge energy sitting on the dominant axis or its perpendicular.
+  // High → boxes and hard corners. Low → curves and organic contour.
+  const near = (i, centre) => {
+    const d = Math.abs(((i-centre+BINS*1.5)%BINS)-BINS/2);
+    return d <= 2.5;               // within ±12.5°
+  };
+  const perp = (peak + BINS/2) % BINS;
+  let onAxis = 0;
+  for(let i=0;i<BINS;i++) if(near(i,peak) || near(i,perp)) onAxis += hist[i];
+  const rectilinearity = clamp(onAxis/total, 0, 1);
+
+  return {
+    dominantAngle: dominant,
+    angularity,
+    orthogonality: 1 - clamp(toOrtho, 0, 1),
+    edgeDensity: clamp(meanMag/.35, 0, 1),
+    structured: true,
+    coverage,
+    peakCount,
+    rectilinearity,
+    ...analyzeShape(g, w, h),
+    ...focus,
+  };
+}
+
+/* ── 3a. FOCUS — what is this image ABOUT?
+   Whole-frame statistics describe the frame, not the subject. In a photo of
+   a monitor in a room, the room is most of the pixels: beige walls dominate
+   the palette and the flat wall dilutes every structural measurement, so the
+   thing a designer actually looks at — the screen — gets averaged away.
+
+   Score each cell for chroma and detail, keep the cells well above average,
+   and take the bounding box of the largest connected run of them. Everything
+   structural is then measured inside that box. */
+function analyzeFocus(data, g, w, h){
+  const CX = 32, CY = 24;
+  const cw = Math.max(1, Math.floor(w/CX)), ch = Math.max(1, Math.floor(h/CY));
+  const nx = Math.floor(w/cw), ny = Math.floor(h/ch);
+  const score = new Float32Array(nx*ny);
+
+  for(let cy=0;cy<ny;cy++) for(let cx=0;cx<nx;cx++){
+    let chr=0, det=0, n=0;
+    for(let y=cy*ch;y<(cy+1)*ch;y++) for(let x=cx*cw;x<(cx+1)*cw;x++){
+      const i=(y*w+x)*4;
+      chr += chroma([data[i],data[i+1],data[i+2]])/100;
+      if(x>0 && y>0 && x<w-1 && y<h-1){
+        const j=y*w+x;
+        det += Math.abs(g[j]-g[j-1]) + Math.abs(g[j]-g[j-w]);
+      }
+      n++;
+    }
+    score[cy*nx+cx] = (chr/n)*0.58 + clamp((det/n)*9, 0, 1)*0.42;
+  }
+
+  const mean = score.reduce((a,b)=>a+b,0)/score.length;
+  const max  = Math.max(...score);
+  const thr  = mean + (max-mean)*0.34;
+
+  // largest 4-connected blob of above-threshold cells
+  const seen = new Uint8Array(nx*ny);
+  let best = null;
+  for(let i=0;i<nx*ny;i++){
+    if(seen[i] || score[i] < thr) continue;
+    const stack=[i]; seen[i]=1;
+    let x0=nx, y0=ny, x1=-1, y1=-1, count=0;
+    while(stack.length){
+      const k=stack.pop(), kx=k%nx, ky=(k-kx)/nx;
+      count++;
+      if(kx<x0)x0=kx; if(kx>x1)x1=kx; if(ky<y0)y0=ky; if(ky>y1)y1=ky;
+      const nb=[kx>0?k-1:-1, kx<nx-1?k+1:-1, ky>0?k-nx:-1, ky<ny-1?k+nx:-1];
+      for(const m of nb) if(m>=0 && !seen[m] && score[m]>=thr){ seen[m]=1; stack.push(m); }
+    }
+    if(!best || count>best.count) best={x0,y0,x1,y1,count};
+  }
+
+  // Fall back to the whole frame if nothing stands out — a flat lay or a
+  // studio shot legitimately has no subject region.
+  const cov = best ? best.count/(nx*ny) : 1;
+  if(!best || cov < 0.05 || cov > 0.86)
+    return {fx0:0, fy0:0, fx1:w, fy1:h, focusCoverage:1, focused:false};
+
+  return {
+    fx0: Math.max(0, best.x0*cw),
+    fy0: Math.max(0, best.y0*ch),
+    fx1: Math.min(w, (best.x1+1)*cw),
+    fy1: Math.min(h, (best.y1+1)*ch),
+    focusCoverage: round(cov, 3),
+    focused: true,
+  };
+}
+
+// crop a grayscale plane to the focus box
+function cropGray(g, w, h, f){
+  const cw = f.fx1-f.fx0, chh = f.fy1-f.fy0;
+  const out = new Float32Array(cw*chh);
+  for(let y=0;y<chh;y++) for(let x=0;x<cw;x++) out[y*cw+x] = g[(y+f.fy0)*w + (x+f.fx0)];
+  return {g:out, w:cw, h:chh};
+}
+
+/* ── 3b. SHAPE — what the image is made OF, not just which way it points.
+   These metrics choose the pattern's primitive and its arrangement, so two
+   images with the same dominant angle still produce different patterns. */
+function analyzeShape(g, w, h){
+  // row / column mean luminance → banding
+  const rowM = new Float32Array(h), colM = new Float32Array(w);
+  for(let y=0;y<h;y++){ let s=0; for(let x=0;x<w;x++) s+=g[y*w+x]; rowM[y]=s/w; }
+  for(let x=0;x<w;x++){ let s=0; for(let y=0;y<h;y++) s+=g[y*w+x]; colM[x]=s/h; }
+  const vari = arr => {
+    const m = arr.reduce((a,b)=>a+b,0)/arr.length;
+    return arr.reduce((a,b)=>a+(b-m)**2,0)/arr.length;
+  };
+  const vR = vari(rowM), vC = vari(colM);
+  // → 1 means rows differ (horizontal bands); 0 means columns differ (vertical)
+  const banding = (vR+vC) < 1e-6 ? .5 : vR/(vR+vC);
+  const bandStrength = clamp(Math.sqrt(Math.max(vR,vC))*7, 0, 1);
+
+  // mirror symmetry
+  let dV=0, dH=0, n=0;
+  for(let y=0;y<h;y++) for(let x=0;x<w>>1;x++){
+    dV += Math.abs(g[y*w+x] - g[y*w+(w-1-x)]); n++;
+  }
+  const symV = clamp(1 - (dV/(n||1))*3.2, 0, 1);
+  n=0;
+  for(let y=0;y<h>>1;y++) for(let x=0;x<w;x++){
+    dH += Math.abs(g[y*w+x] - g[(h-1-y)*w+x]); n++;
+  }
+  const symH = clamp(1 - (dH/(n||1))*3.2, 0, 1);
+
+  // radial structure — does luminance track distance from centre?
+  // (vignettes, spotlights, circular compositions)
+  const cx=w/2, cy=h/2, maxR=Math.hypot(cx,cy);
+  let sr=0, sl=0, srl=0, sr2=0, sl2=0, m=0;
+  for(let y=0;y<h;y+=2) for(let x=0;x<w;x+=2){
+    const r=Math.hypot(x-cx,y-cy)/maxR, l=g[y*w+x];
+    sr+=r; sl+=l; srl+=r*l; sr2+=r*r; sl2+=l*l; m++;
+  }
+  const num = m*srl - sr*sl;
+  const den = Math.sqrt((m*sr2 - sr*sr)*(m*sl2 - sl*sl)) || 1;
+  const radial = clamp(Math.abs(num/den), 0, 1);
+
+  // feature scale — mean run length between luminance crossings.
+  // Small → fine detail and many small elements. Large → few big shapes.
+  let runs=0, cells=0;
+  for(let y=0;y<h;y+=2){
+    let above = g[y*w] > rowM[y];
+    for(let x=1;x<w;x++){
+      const a = g[y*w+x] > rowM[y];
+      if(a!==above){ runs++; above=a; }
+      cells++;
+    }
+  }
+  const featureScale = clamp(1 - (runs/(cells||1))*14, 0, 1);   // 1 = big shapes
+
+  const panel = analyzePanel(g, w, h);
+  return {
+    banding, bandStrength, symV, symH, radial, featureScale,
+    ...panel,
+    // Overlay panels sit ON TOP of the form — a UI window pasted over a
+    // photograph. Measuring flow through one mixes the gradient underneath
+    // with the dense hard-edged text on top, and the two cancel out. Mask it.
+    ...analyzeFlow(g, w, h, panel.panelBox),
+  };
+}
+
+/* Waviness — a LOCAL orientation field, not a global brightness ridge.
+   A wave has no single dominant direction; it has a direction that rotates
+   smoothly across the frame. Measuring a global brightness ridge fails on
+   exactly the images this is for: in a photo of a monitor, the ridge jumps
+   between the bright window behind and the screen in front, and reads as
+   noise rather than flow.
+
+   So: split into blocks, take each block's dominant edge orientation and how
+   strongly it holds, then look at how that orientation CHANGES between
+   neighbours. Rigid geometry → no change. Noise → chaotic change. A wave →
+   steady, gradual rotation. */
+function analyzeFlow(g, w, h, mask){
+  const inMask = (x,y) => mask && x >= mask.x0 && x < mask.x1 && y >= mask.y0 && y < mask.y1;
+  const BX = 14, BY = 11;
+  const bw = Math.max(3, Math.floor(w/BX)), bh = Math.max(3, Math.floor(h/BY));
+  const nx = Math.floor(w/bw), ny = Math.floor(h/bh);
+  const ang = new Float32Array(nx*ny), coh = new Float32Array(nx*ny);
+
+  for(let by=0;by<ny;by++) for(let bx=0;bx<nx;bx++){
+    let sc=0, ss=0, sm=0;
+    const x1=Math.max(1,bx*bw), x2=Math.min(w-1,(bx+1)*bw);
+    const y1=Math.max(1,by*bh), y2=Math.min(h-1,(by+1)*bh);
+    for(let y=y1;y<y2;y++) for(let x=x1;x<x2;x++){
+      if(inMask(x,y)) continue;
+      const i=y*w+x;
+      const gx = -g[i-w-1] - 2*g[i-1] - g[i+w-1] + g[i-w+1] + 2*g[i+1] + g[i+w+1];
+      const gy = -g[i-w-1] - 2*g[i-w] - g[i-w+1] + g[i+w-1] + 2*g[i+w] + g[i+w+1];
+      const m  = Math.hypot(gx,gy);
+      if(m < 0.02) continue;
+      const th = Math.atan2(gy,gx)*2;            // doubled angle: edges are undirected
+      sc += m*Math.cos(th); ss += m*Math.sin(th); sm += m;
+    }
+    const k = by*nx+bx;
+    ang[k] = Math.atan2(ss, sc)/2;
+    coh[k] = sm > 1e-6 ? Math.hypot(sc,ss)/sm : 0;   // 0 = no agreement, 1 = one clean direction
+  }
+
+  // SIGNED rotation between horizontal neighbours. Sign is the whole point:
+  // a wave keeps turning the same way as you travel across it, while a
+  // rectilinear UI flips between horizontal and vertical edges, so its turns
+  // alternate and cancel. Magnitude alone cannot tell those two apart.
+  const signedDiff = (a,b) => {
+    let d = (b-a)*2;
+    while(d >  Math.PI) d -= Math.PI*2;
+    while(d < -Math.PI) d += Math.PI*2;
+    return d/2 * 180/Math.PI;                    // degrees, −90…90
+  };
+
+  let cSum=0, cN=0, absSum=0, absN=0, consSum=0, consN=0;
+  for(let by=0;by<ny;by++){
+    let net=0, gross=0;
+    for(let bx=0;bx<nx;bx++){
+      const k=by*nx+bx;
+      if(coh[k] < .12) continue;
+      cSum += coh[k]; cN++;
+      if(bx+1<nx && coh[k+1] >= .12){
+        const d = signedDiff(ang[k], ang[k+1]);
+        net += d; gross += Math.abs(d);
+        absSum += Math.abs(d); absN++;
+      }
+    }
+    if(gross > 12){ consSum += Math.abs(net)/gross; consN++; }
+  }
+  const coherence  = cN ? cSum/cN : 0;
+  const rotation   = absN ? absSum/absN : 0;
+  const consistency= consN ? consSum/consN : 0;   // 1 = turns one way, 0 = cancels out
+
+  // Edge softness. A tonal wave is built from gentle gradients; drawn UI and
+  // vector art are built from hard steps. Without this, a curved monitor
+  // bezel scores as "flowing" just as strongly as an actual gradient sweep.
+  let soft=0, hard=0;
+  for(let y=1;y<h-1;y++) for(let x=1;x<w-1;x++){
+    if(inMask(x,y)) continue;
+    const i=y*w+x;
+    const gx = -g[i-w-1] - 2*g[i-1] - g[i+w-1] + g[i-w+1] + 2*g[i+1] + g[i+w+1];
+    const gy = -g[i-w-1] - 2*g[i-w] - g[i-w+1] + g[i+w-1] + 2*g[i+w] + g[i+w+1];
+    const m  = Math.hypot(gx,gy);
+    if(m > 0.02 && m < 0.16) soft++;
+    else if(m >= 0.45)       hard++;
+  }
+  const softness = clamp(soft/(soft + hard*3.2 + 1), 0, 1);
+
+  // Flow lives in the middle: near-zero rotation is rigid geometry,
+  // very large rotation is noise. Peak the response around ~18°.
+  const bump = Math.exp(-(((rotation - 18)/14) ** 2));
+
+  return {
+    waviness:      clamp(coherence * bump * consistency * softness * 4.6, 0, 1),
+    flowCoherence: round(coherence, 3),
+    flowRotation:  round(rotation, 1),
+    flowConsistency: round(consistency, 3),
+    edgeSoftness:  round(softness, 3),
+  };
+}
+
+/* Overlay panels — large, flat, axis-aligned regions sitting on top of
+   busier content. The translucent app window in 10dark is the case that
+   prompted this. Their presence changes how elevation should be expressed:
+   layered translucent surfaces rather than tonal steps or shadows. */
+function analyzePanel(g, w, h){
+  const CX = 40, CY = 30;                       // coarse cell grid
+  const cw = Math.max(1, Math.floor(w/CX)), ch = Math.max(1, Math.floor(h/CY));
+  const nx = Math.floor(w/cw), ny = Math.floor(h/ch);
+  const mean = new Float32Array(nx*ny), varr = new Float32Array(nx*ny);
+
+  for(let cy=0;cy<ny;cy++) for(let cx=0;cx<nx;cx++){
+    let s=0, s2=0, n=0;
+    for(let y=cy*ch;y<(cy+1)*ch;y++) for(let x=cx*cw;x<(cx+1)*cw;x++){
+      const v=g[y*w+x]; s+=v; s2+=v*v; n++;
+    }
+    const m=s/n; mean[cy*nx+cx]=m; varr[cy*nx+cx]=Math.max(0, s2/n - m*m);
+  }
+  const gMean = mean.reduce((a,b)=>a+b,0)/mean.length;
+
+  // A cell belongs to a candidate panel if it's flat and clearly off the
+  // global average in one direction.
+  const best = {area:0};
+  for(const dir of [-1, 1]){
+    const mask = new Uint8Array(nx*ny);
+    for(let i=0;i<nx*ny;i++)
+      mask[i] = (varr[i] < 0.006 && (mean[i]-gMean)*dir > 0.055) ? 1 : 0;
+
+    // largest all-ones rectangle, histogram method per row
+    const heights = new Int32Array(nx);
+    for(let y=0;y<ny;y++){
+      for(let x=0;x<nx;x++) heights[x] = mask[y*nx+x] ? heights[x]+1 : 0;
+      const stack=[];
+      for(let x=0;x<=nx;x++){
+        const cur = x<nx ? heights[x] : 0;
+        while(stack.length && heights[stack[stack.length-1]] >= cur){
+          const ht = heights[stack.pop()];
+          const left = stack.length ? stack[stack.length-1]+1 : 0;
+          const area = ht*(x-left);
+          if(area > best.area)
+            Object.assign(best, {area, w:x-left, h:ht, dir, x0:left, y0:y-ht+1});
+        }
+        stack.push(x);
+      }
+    }
+  }
+
+  const coverage = best.area/(nx*ny);
+  const found = coverage > 0.055 && best.w >= 3 && best.h >= 3;
+  return {
+    panelFound: found,
+    panelCoverage: round(coverage, 3),
+    panelDarker: best.dir === -1,
+    panelAspect: best.area ? round(best.w/best.h, 2) : 0,
+    panelBox: found ? {x0:best.x0*cw, y0:best.y0*ch, x1:(best.x0+best.w)*cw, y1:(best.y0+best.h)*ch} : null,
+  };
+}
+
+/* ── 4. FULL ANALYSIS ────────────────────────────────── */
+function analyze(img){
+  const MAX = 190;
+  const sc = Math.min(1, MAX/Math.max(img.width, img.height));
+  const w = Math.max(8, Math.round(img.width*sc)), h = Math.max(8, Math.round(img.height*sc));
+  const cv = document.createElement('canvas');
+  cv.width=w; cv.height=h;
+  const cx = cv.getContext('2d', {willReadFrequently:true});
+  cx.drawImage(img, 0, 0, w, h);
+  const data = cx.getImageData(0,0,w,h).data;
+
+  const px = [], uniq = new Set();
+  let satSum=0, lumSum=0, cnt=0;
+  for(let i=0; i<data.length; i+=4){
+    if(data[i+3] < 128) continue;
+    const rgb=[data[i],data[i+1],data[i+2]];
+    px.push(rgb);
+    const [,s,l] = rgbToHsl(...rgb);
+    satSum+=s; lumSum+=l; cnt++;
+    uniq.add(((rgb[0]>>3)<<10)|((rgb[1]>>3)<<5)|(rgb[2]>>3));
+  }
+  cnt = cnt || 1;
+
+  const clusters = kMeans(px, 8);
+  const sats = clusters.map(c=>rgbToHsl(...c.color)[1]);
+  const mSat = sats.reduce((a,b)=>a+b,0)/(sats.length||1);
+  const sVar = sats.reduce((s,v)=>s+(v-mSat)**2,0)/(sats.length||1);
+  const energy = clamp(Math.sqrt(sVar)/35, 0, 1);
+
+  let warm=0, cool=0;
+  for(const c of clusters){
+    const [hh,,ll] = rgbToHsl(...c.color);
+    if(ll < 10) continue;
+    if(hh<60 || hh>300) warm += c.count;
+    else if(hh>140 && hh<260) cool += c.count;
+  }
+
+  return {
+    clusters,
+    energy,
+    temp: (warm-cool)/(warm+cool+1),
+    complexity: clamp(uniq.size/3200, 0, 1),
+    avgSat: satSum/cnt,
+    avgLum: lumSum/cnt,
+    ...analyzeStructure(data, w, h),
+  };
+}
+
+/* ── 5. FONT SHORTLIST ───────────────────────────────────
+   ~28 variable Google Fonts, tagged so the analysis has
+   something to match against. No font FILES are bundled —
+   these are names + tags. Faces load over the keyless CSS2
+   API. See PLAN.md "Typography & font selection".        */
+const FONTS = [
+  // name                 category     contrast warmth  weight-range  role
+  ['Inter',               'grotesque', .20,  .00, '100..900',  'both'],
+  ['Manrope',             'grotesque', .20,  .15, '200..800',  'both'],
+  ['Archivo',             'grotesque', .25, -.10, '100..900',  'both'],
+  ['Figtree',             'grotesque', .20,  .20, '300..900',  'both'],
+  ['Space Grotesk',       'grotesque', .30, -.15, '300..700',  'label'],
+  ['Outfit',              'geometric', .15,  .05, '100..900',  'both'],
+  ['Montserrat',          'geometric', .20,  .05, '100..900',  'both'],
+  ['Sora',                'geometric', .25, -.20, '100..800',  'both'],
+  ['Epilogue',            'geometric', .30, -.05, '100..900',  'both'],
+  ['Nunito Sans',         'humanist',  .20,  .40, '200..1000', 'body'],
+  ['Source Sans 3',       'humanist',  .25,  .25, '200..900',  'body'],
+  ['Open Sans',           'humanist',  .25,  .20, '300..800',  'body'],
+  ['Public Sans',         'humanist',  .25,  .10, '100..900',  'both'],
+  ['Crimson Pro',         'serif',     .50,  .45, '200..900',  'body'],
+  ['Literata',            'serif',     .45,  .35, '200..900',  'body'],
+  ['Lora',                'serif',     .50,  .40, '400..700',  'body'],
+  ['Source Serif 4',      'serif',     .45,  .25, '200..900',  'body'],
+  ['Playfair Display',    'serif',     .90,  .30, '400..900',  'display'],
+  ['Bodoni Moda',         'serif',     .95,  .10, '400..900',  'display'],
+  ['Fraunces',            'serif',     .70,  .50, '100..900',  'display'],
+  ['Roboto Slab',         'slab',      .30,  .15, '100..900',  'both'],
+  ['Bitter',              'slab',      .35,  .25, '100..900',  'body'],
+  ['Bricolage Grotesque', 'display',   .40, -.05, '200..800',  'display'],
+  ['Unbounded',           'display',   .35, -.20, '200..900',  'display'],
+  ['Archivo Narrow',      'condensed', .30, -.05, '400..700',  'label'],
+  ['Oswald',              'condensed', .35, -.10, '200..700',  'label'],
+  ['JetBrains Mono',      'mono',      .20, -.10, '100..800',  'label'],
+  ['Fira Code',           'mono',      .20,  .00, '300..700',  'label'],
+].map(f=>({name:f[0], cat:f[1], contrast:f[2], warmth:f[3], wght:f[4], role:f[5]}));
+
+const loadedFonts = new Set();
+function loadFont(f){
+  if(loadedFonts.has(f.name)) return;
+  loadedFonts.add(f.name);
+  const l = document.createElement('link');
+  l.rel = 'stylesheet';
+  l.href = `https://fonts.googleapis.com/css2?family=${f.name.replace(/ /g,'+')}:wght@${f.wght}&display=swap`;
+  document.head.appendChild(l);
+}
+const stackFor = f =>
+  f.cat==='mono'  ? `'${f.name}', ui-monospace, monospace`
+: f.cat==='serif' ? `'${f.name}', Georgia, serif`
+:                   `'${f.name}', system-ui, -apple-system, sans-serif`;
+
+// Match a font to the image. An inference, not a derivation — hence
+// the stated rationale and the swap control in the UI.
+function pickFont(a, role, skip=0){
+  const wantContrast = clamp(a.energy*.45 + (1-a.avgLum/100)*.25 + a.angularity*.20, 0, 1);
+  const wantWarmth   = clamp(a.temp, -1, 1) * .6;
+  const wantCat = (()=>{
+    if(role==='label') return ['mono','condensed','grotesque'];
+    if(a.angularity > .58 && a.orthogonality > .55) return ['grotesque','geometric','slab'];
+    if(a.angularity < .32) return ['humanist','serif','grotesque'];
+    if(a.energy > .62)     return ['display','geometric','grotesque'];
+    if(a.temp > .30)       return ['serif','humanist','slab'];
+    return ['grotesque','humanist','geometric'];
+  })();
+
+  const scored = FONTS
+    .filter(f => role==='label' ? (f.role==='label'||f.role==='both') : (f.role!=='label'))
+    .map(f=>{
+      let s = 0;
+      const ci = wantCat.indexOf(f.cat);
+      s += ci === -1 ? 0 : (3-ci)*2.4;
+      s -= Math.abs(f.contrast - wantContrast)*3.2;
+      s -= Math.abs(f.warmth   - wantWarmth  )*2.0;
+      if(a.complexity > .66 && f.cat === 'display') s -= 2.5;  // busy image → quiet type
+      if(a.complexity < .30 && f.cat === 'display') s += 1.0;
+      return {f, s};
+    })
+    .sort((x,y)=>y.s-x.s);
+
+  return scored[skip % scored.length].f;
+}
+function fontWhy(f, a){
+  const bits = [
+    a.temp > .25 ? 'warm source' : a.temp < -.25 ? 'cool source' : 'neutral source',
+    a.angularity > .55 ? 'hard-edged structure' : a.angularity < .32 ? 'soft, organic structure' : 'mixed structure',
+    a.complexity > .66 ? 'high visual complexity so type stays quiet'
+      : a.complexity < .30 ? 'sparse image so type can carry character'
+      : 'moderate complexity',
+  ];
+  const cat = f.cat==='mono' ? 'Monospace' : f.cat[0].toUpperCase()+f.cat.slice(1);
+  return `${bits.join(', ')}. ${cat} selected.`;
+}
+
+/* ── 6. TOKEN DERIVATION ─────────────────────────────────
+   Levers are COUPLED — each moves several outputs at once. */
+function deriveTokens(a, lev, dropped){
+  const E = clamp(a.energy      + lev.energy  * .42,  0, 1);  // energy
+  const T = clamp(a.temp        + lev.tone    * .70, -1, 1);  // temperature
+  // Density is now a pattern control only — see the Pattern lever group.
+  const dens01 = (lev.density == null ? defaultDensity(a) : lev.density) / 100;
+  const D = dens01;
+  const S = lev.speed;
+
+  // Curve and Padding are ABSOLUTE 0–100 controls, not offsets. The image
+  // sets the starting position; after that the number on screen is the
+  // number in the exported file.
+  const curve01 = (lev.curve   == null ? defaultCurve(a)   : lev.curve)   / 100;
+  const pad01   = (lev.padding == null ? defaultPadding(a) : lev.padding) / 100;
+  const C = 1 - curve01;                                      // 1 tight … 0 loose
+
+  /* colours */
+  const live = a.clusters.filter((_,i)=>!dropped.has(i));
+  const pool = live.length ? live : a.clusters;
+  const shift = c => {
+    const [h,s,l] = rgbToHsl(...c);
+    const target = T > 0 ? 30 : 215;                   // warm / cool anchor
+    const dh = ((target - h + 540) % 360) - 180;
+    return hslToRgb(h + dh*Math.abs(lev.tone)*.34, s + lev.tone*4, l);
+  };
+
+  const sorted = [...pool].sort((x,y)=>y.count-x.count);
+  const byLum  = [...pool].sort((x,y)=>rgbToHsl(...y.color)[2]-rgbToHsl(...x.color)[2]);
+
+  const primary   = shift(sorted[0].color);
+  const secondary = shift((sorted[1] || sorted[0]).color);
+
+  // Accent = most chromatic colour that is actually DIFFERENT from primary.
+  // Picking on raw saturation alone gives you an accent identical to the
+  // primary, or a cream that can't function as a highlight.
+  const dist = (a,b) => Math.sqrt((a[0]-b[0])**2 + (a[1]-b[1])**2 + (a[2]-b[2])**2)/441;
+  const accentPick = [...pool]
+    .map(c => ({c, score: chroma(c.color)*0.62 + dist(c.color, sorted[0].color)*100*0.38}))
+    .sort((x,y)=>y.score-x.score)[0];
+  const tertiary  = shift(accentPick.c.color);
+
+  const lightest  = byLum[0].color;
+  const darkest   = byLum[byLum.length-1].color;
+
+  // ── light or dark? The image decides. ──
+  // A dark photograph should not produce a white interface. Surface and
+  // on-surface swap ends, and the background keeps the image's own hue so
+  // it reads as belonging to the source rather than as generic grey.
+  const dark = a.avgLum < 44;
+  const [ph, ps]   = rgbToHsl(...sorted[0].color);
+  const [dh2, ds2] = rgbToHsl(...darkest);
+  const [nh,  ns]  = rgbToHsl(...lightest);
+
+  // Hue comes from the DOMINANT colour, not the lightest cluster. The
+  // lightest cluster is usually a near-white highlight with no hue at all,
+  // which is how you end up with a generic grey page for a vividly coloured
+  // image. A saturation floor guarantees the background is always tinted by
+  // its source rather than defaulting to neutral.
+  const bgHue = ps > 6 ? ph : (ds2 > 6 ? dh2 : nh);
+  const bgSat = Math.max(ps, ds2, ns);
+  // Light backgrounds sit at 95–96%, not 98%. At 98% a tint is arithmetically
+  // present but invisible, and every image resolves to the same off-white.
+  // A few points lower and a warm source reads as cream, a cool one as paper.
+  const surface   = dark ? hslToRgb(bgHue, clamp(bgSat*.42,  6, 26),  8)
+                         : hslToRgb(bgHue, clamp(bgSat*.26,  7, 26), 95.5);
+  const neutral   = dark ? hslToRgb(bgHue, clamp(bgSat*.44,  7, 28), 14)
+                         : hslToRgb(bgHue, clamp(bgSat*.30,  9, 30), 90);
+  const onSurface = dark ? hslToRgb(bgHue, clamp(ps*.16, 0, 10), 95)
+                         : hslToRgb(bgHue, clamp(ds2*.30, 0, 20), 11);
+
+  // Legibility is a property of the tokens, not a patch applied in CSS.
+  //
+  // Every foreground is checked against BOTH grounds it can land on: the page
+  // (`surface`) and a panel (`neutral`). Guaranteeing only against surface is
+  // the obvious mistake and it fails quietly — a panel is a slightly different
+  // tone, so text clearing 4.5:1 on the page can sit at 3.8:1 on a card.
+  // `neutral` is always the harder of the two; not checking it left roughly 7%
+  // of all foreground/background pairs below AA.
+  const grounds = [surface, neutral];
+  const legible = (col, target) => {
+    let c = col, guard = 0;
+    const up = relLum(surface) < 0.35;             // dark theme → lighten
+    while(grounds.some(bg => contrast(c, bg) < target) && guard++ < 80){
+      const [hh,ss,ll] = rgbToHsl(...c);
+      const nl = up ? ll + 1.5 : ll - 1.5;
+      if(nl <= 0 || nl >= 100) break;
+      c = hslToRgb(hh, ss, nl);
+    }
+    return c;
+  };
+
+  const colors = {
+    primary:   legible(primary,   4.5),
+    // 4.5, not 3.0 — the spec's own guidance puts metadata and captions on
+    // secondary, and metadata is text. A border-only target leaves that text
+    // unreadable on tinted backgrounds.
+    secondary: legible(secondary, 4.5),
+    tertiary:  legible(tertiary,  4.5),
+    neutral, surface,
+    'on-surface': legible(onSurface, 7.0),
+  };
+
+  /* type */
+  const bodyFont  = pickFont(a, 'body',  0);
+  const labelFont = pickFont(a, 'label', 0);
+  loadFont(bodyFont); loadFont(labelFont);
+
+  const ratio  = lerp(1.16, 1.34, E);            // calm → tight scale, bold → dramatic
+  const base   = Math.round(lerp(15, 18, pad01)); // Padding sets the spatial feel, text included
+  const wR     = bodyFont.wght.split('..').map(Number);
+  const wBody  = Math.round(clamp(lerp(360, 460, E), wR[0], wR[1]));
+  const wHead  = Math.round(clamp(lerp(520, 780, E), wR[0], wR[1]));
+  const lh     = round(lerp(1.68, 1.42, E), 2);
+  const ls     = round(lerp(-.005, -.032, E), 3);
+  // Negative steps use a gentler ratio, and nothing is allowed below 11px.
+  // An aggressive ratio applied downward drove label-sm to 8.1px, which is
+  // unreadable regardless of contrast.
+  const MIN_SIZE = 11;
+  const sz = n => {
+    const r = n < 0 ? Math.min(ratio, 1.18) : ratio;
+    return Math.max(MIN_SIZE, round(base * r**n, 1));
+  };
+
+  const typography = {
+    'headline-display': {f:bodyFont,  size:sz(5),    w:wHead, lh:1.02, ls:round(ls*1.5,3)},
+    'headline-lg':      {f:bodyFont,  size:sz(3.4),  w:wHead, lh:1.10, ls:round(ls*1.2,3)},
+    'headline-md':      {f:bodyFont,  size:sz(2.2),  w:wHead, lh:1.18, ls:ls},
+    'headline-sm':      {f:bodyFont,  size:sz(1.3),  w:Math.round((wHead+wBody)/2), lh:1.28, ls:round(ls*.6,3)},
+    'body-lg':          {f:bodyFont,  size:sz(.6),   w:wBody, lh:lh,   ls:0},
+    'body-md':          {f:bodyFont,  size:sz(0),    w:wBody, lh:lh,   ls:0},
+    'body-sm':          {f:bodyFont,  size:sz(-.9),  w:wBody, lh:round(lh*.96,2), ls:0},
+    'label-lg':         {f:labelFont, size:sz(-.5),  w:520,   lh:1.20, ls:.04},
+    'label-md':         {f:labelFont, size:sz(-1.3), w:520,   lh:1.20, ls:.07},
+    'label-sm':         {f:labelFont, size:sz(-2.1), w:560,   lh:1.15, ls:.10, caps:true},
+  };
+
+  /* shape — Curve maps straight onto the panel corner radius, 0 → 32px */
+  const rBase = Math.round(lerp(0, 32, curve01));
+  const rounded = {
+    none:'0px',
+    sm: Math.max(0, Math.round(rBase*.4))+'px',
+    md: rBase+'px',
+    lg: Math.round(rBase*1.7)+'px',
+    xl: Math.round(rBase*2.6)+'px',
+    full:'9999px',
+  };
+
+  /* space — Padding maps straight onto the base spacing unit, 4 → 40px */
+  const sBase = Math.round(lerp(4, 40, pad01));
+  const spacing = {
+    base:  sBase+'px',
+    xs: Math.round(sBase*.25)+'px',
+    sm: Math.round(sBase*.5)+'px',
+    md: sBase+'px',
+    lg: Math.round(sBase*2)+'px',
+    xl: Math.round(sBase*4)+'px',
+    gutter: Math.round(sBase*1.5)+'px',
+    margin: Math.round(sBase*2)+'px',
+  };
+
+  /* components — sized from Padding (inside) and Button size (overall).
+     Deliberately NOT all the same: a button, a chip and a card carry
+     different weight, so they get related but distinct values off one scale. */
+  const btn01 = (lev.buttonSize == null ? defaultButtonSize(a) : lev.buttonSize) / 100;
+  const btnH  = Math.round(lerp(26, 56, btn01));
+  const btnPX = Math.round(lerp(8, 30, pad01));          // Padding acts INSIDE the button
+  const btnPY = Math.max(2, Math.round((btnH - base*1.25)/2));
+  const chipH = Math.round(btnH * 0.74);
+  const inputH= Math.round(btnH * 1.04);
+  const components = {
+    'button-height':  btnH+'px',
+    'button-padding': `${btnPY}px ${btnPX}px`,
+    'chip-height':    chipH+'px',
+    'chip-padding':   `${Math.max(2,Math.round(btnPY*.6))}px ${Math.round(btnPX*.62)}px`,
+    'input-height':   inputH+'px',
+    'card-padding':   spacing.lg,
+    'panel-padding':  spacing.md,
+    'min-target':     '44px',
+  };
+
+  /* motion — speed lever + energy */
+  const mult = lerp(1.55, .55, clamp((S+1)/2*.65 + E*.35, 0, 1));
+  const duration = {
+    fast:   Math.round(140*mult/10)*10,
+    medium: Math.round(300*mult/10)*10,
+    slow:   Math.round(580*mult/10)*10,
+  };
+  // Curve lever shapes the easing: tight = crisp, loose = overshoot
+  const oc = round(lerp(1.0, 1.62, 1-C), 2);
+  const easing = {
+    standard:   'cubic-bezier(0.2, 0, 0, 1)',
+    emphasized: `cubic-bezier(0.2, 0, 0, ${oc})`,
+    decelerate: `cubic-bezier(0, 0, ${round(lerp(0,.18,1-C),2)}, 1)`,
+  };
+  // WCAG 2.2 (2.3.3): >200ms reads as deliberate motion and needs a
+  // reduced-motion path. Emitted automatically, never a checkbox.
+  const fallback = {};
+  for(const [k,v] of Object.entries(duration)) if(v > 200) fallback[k] = 100;
+
+  /* pattern — shape and arrangement both come from the image */
+  const pattern = derivePattern(a, E, D, C, lev.shape || null);
+  pattern.blur    = lev.blur    == null ? defaultBlur(a)    : lev.blur;      // 0–100
+  pattern.opacity = lev.opacity == null ? defaultOpacity(a) : lev.opacity;   // 0–100
+
+  return {
+    colors, typography, rounded, spacing, components,
+    motion:{duration, easing, fallback},
+    pattern,
+    meta:{E,T,D,C,S, curve:Math.round(curve01*100), padding:Math.round(pad01*100),
+      density:Math.round(dens01*100), blur:pattern.blur, opacity:pattern.opacity,
+      buttonSize:Math.round(btn01*100), btnH, btnPX, btnPY, chipH,
+      dark, bodyFont, labelFont, ratio, base,
+      // A near-monochrome source has no chromatic colour to promote. Say so
+      // rather than shipping an "accent" that is really just another grey.
+      monochrome: chroma(tertiary) < 12,
+      accentChroma: round(chroma(tertiary), 1),
+    },
+  };
+}
+
+/* Starting positions for the two absolute levers, read off the image.
+   Softer, lower-energy images start rounder; denser images start tighter. */
+function defaultCurve(a){
+  const soft = (1-a.energy)*.42 + (1-a.rectilinearity)*.38 + (a.edgeSoftness||0)*.20;
+  return Math.round(clamp(soft, 0, 1) * 78);
+}
+function defaultPadding(a){
+  return Math.round(clamp(1 - a.complexity*0.75, 0, 1) * 62 + 12);
+}
+// Softer sources start blurrier; busier sources start fainter so the pattern
+// never competes with the interface sitting on top of it.
+// Busier sources start with more compact controls so the chrome stays out
+// of the way; sparse sources can afford a larger, more generous button.
+function defaultButtonSize(a){
+  return Math.round(clamp(1 - a.complexity*0.6, 0, 1) * 46 + 22);
+}
+function defaultDensity(a){
+  return Math.round(clamp(a.complexity, 0, 1) * 70 + 15);
+}
+function defaultBlur(a){
+  return Math.round(clamp((a.edgeSoftness||0)*.7 + (1-a.rectilinearity)*.3, 0, 1) * 46);
+}
+function defaultOpacity(a){
+  return Math.round(clamp(1 - a.complexity*0.55, 0, 1) * 46 + 12);
+}
+
+/* ── 6b. PATTERN DERIVATION ──────────────────────────────
+   The pattern is a PRIMITIVE arranged by a LAYOUT. Both are
+   chosen from image geometry, so two images that happen to
+   share a dominant angle still produce different patterns.  */
+function derivePattern(a, E, D, C, override){
+  const st = a.structured;
+  const flow = a.waviness * (1 - a.rectilinearity);   // flow that isn't just rigid geometry
+
+  // ── primitive: what the image is built from ──
+  // Thresholds are tuned against the real seed set. `orthogonality` is
+  // deliberately unused here: photographic content nearly always peaks
+  // near 0°/90°, so it reads ~0.94 for almost everything and separates
+  // nothing. rectilinearity and featureScale do the real work.
+  const shape = (()=>{
+    if(override) return override;
+    if(flow > 0.24) return 'wave';                    // smooth, consistently turning form
+    if(!st) return 'blob';
+    if(a.rectilinearity > .70)                        // hard, boxy geometry
+      return a.featureScale > .30 ? 'bar' : 'rect';
+    if(a.rectilinearity > .50){                       // firm but not rigid
+      if(a.radial > .45)          return 'circle';
+      if(a.featureScale > .40)    return 'lozenge';
+      return 'rect';
+    }
+    if(a.rectilinearity > .30){                       // soft structure
+      if(a.radial > .60)          return 'circle';
+      if(a.featureScale > .55)    return 'blob';
+      return 'arc';
+    }
+    return a.angularity > .50 ? 'triangle' : 'blob';  // no straight edges
+  })();
+
+  // ── layout: how those pieces are arranged ──
+  const layout = (()=>{
+    if(shape === 'wave')                           return 'flow';
+    if(a.radial > .60)                             return 'concentric';
+    if(a.bandStrength > .55 && a.banding > .82)    return 'bands';
+    if(a.bandStrength > .55 && a.banding < .35)    return 'columns';
+    if(!st)                                        return 'scatter';
+    if(a.peakCount >= 3)                           return 'scatter';
+    if(a.peakCount === 1 && a.bandStrength > .40)  return 'bands';
+    if(a.symV > .80 && a.symH > .80)               return 'radial';
+    if(a.rectilinearity > .50 && a.featureScale < .40) return 'grid';
+    if(a.featureScale > .55)                       return 'stack';
+    return 'scatter';
+  })();
+
+  // ── GRAIN, in Bertin's sense ──
+  // Bertin defines grain as "the number of separable marks within a unit area",
+  // and varies it by changing mark size AND spacing together *while holding the
+  // ink ratio constant*, so the average value of the area doesn't shift.
+  //
+  // Counting elements alone — which is what this did before — is not grain. It
+  // conflates two of Bertin's variables: turning density up also darkened the
+  // pattern, so you could not make a texture finer without making it heavier.
+  // Scaling element size and stroke by 1/√k against a count multiplier of k
+  // keeps total ink roughly fixed, leaving *value* to Opacity where it belongs.
+  const baseCount = lerp(24, 5, a.featureScale);
+  const grainK    = lerp(0.45, 2.6, D);                // marks per unit area
+  const count     = Math.max(3, Math.round(baseCount * grainK));
+  const inkFix    = 1/Math.sqrt(grainK);
+
+  return {
+    shape, layout, count,
+    grain:    round(D*100),
+    flowStrength: round(flow, 3),
+    angle:    round(a.dominantAngle, 1),
+    scale:    round(clamp(lerp(.3, 1, a.featureScale) * inkFix, .06, 1.6), 3),
+    jitter:   round(clamp((1-a.rectilinearity) * (1-Math.max(a.symV,a.symH)) * 1.6, 0, 1), 2),
+    rounding: round(clamp(1 - a.rectilinearity*1.4, 0, 1), 2),
+    tension:  round(1-C, 2),
+    weight:   round(clamp(lerp(1, 4.2, E) * inkFix, .35, 6), 2),
+    filled:   a.edgeDensity < .42,                     // flat images → solid fills
+  };
+}
+
+// deterministic PRNG so a given image always draws the same pattern
+function rng(seed){
+  let t = Math.floor(seed*4294967295) >>> 0;
+  return ()=>{
+    t = (t + 0x6D2B79F5) >>> 0;
+    let r = Math.imul(t ^ (t>>>15), 1 | t);
+    r = (r + Math.imul(r ^ (r>>>7), 61 | r)) ^ r;
+    return ((r ^ (r>>>14)) >>> 0) / 4294967296;
+  };
+}
+
+/* ── 7. PATTERN RENDERER ─────────────────────────────────
+   Draws PRIMITIVE × LAYOUT. Geometry comes from the image's
+   structure, never from its hue.                           */
+// Where each element sits, given the layout. Returns {x,y,s} in −1…1 space.
+function placements(P, seed){
+  const r = rng(seed);
+  const N = P.count, out = [];
+  const jit = () => (r()-.5) * P.jitter * .55;
+
+  if(P.layout === 'grid'){
+    const c = Math.max(2, Math.round(Math.sqrt(N)));
+    for(let y=0;y<c;y++) for(let x=0;x<c;x++)
+      out.push({x:(x+.5)/c*2-1 + jit(), y:(y+.5)/c*2-1 + jit(), s:1});
+  } else if(P.layout === 'bands'){
+    for(let i=0;i<N;i++){
+      const t = (i+.5)/N;
+      out.push({x:0, y:t*2-1, s:1, span:true, thick:.4+r()*1.2});
+    }
+  } else if(P.layout === 'columns'){
+    for(let i=0;i<N;i++){
+      const t = (i+.5)/N;
+      out.push({x:t*2-1, y:0, s:1, span:true, vertical:true, thick:.4+r()*1.2});
+    }
+  } else if(P.layout === 'concentric'){
+    for(let i=0;i<N;i++) out.push({x:0, y:0, s:(i+1)/N, ring:true});
+  } else if(P.layout === 'radial'){
+    for(let i=0;i<N;i++){
+      const th = i/N*Math.PI*2, rr = .35 + .55*((i*7)%N)/N;
+      out.push({x:Math.cos(th)*rr + jit(), y:Math.sin(th)*rr + jit(), s:.5+.5*r()});
+    }
+  } else if(P.layout === 'flow'){
+    // stacked wave crests, each offset — a sweep across the frame
+    for(let i=0;i<N;i++){
+      const t=(i+.5)/N;
+      out.push({x:0, y:t*2-1, s:1, wave:true, phase:t*Math.PI*1.6 + r()*.4,
+                amp:.28 + r()*.5, thick:.5 + r()*1.1});
+    }
+  } else if(P.layout === 'stack'){
+    for(let i=0;i<N;i++){
+      const t = i/Math.max(1,N-1);
+      out.push({x:(r()-.5)*.5, y:t*1.7-.85, s:.55+.75*(1-t)});
+    }
+  } else { // scatter
+    for(let i=0;i<N;i++)
+      out.push({x:r()*2-1, y:r()*2-1, s:.35+.9*r()});
+  }
+  return out;
+}
+
+// Draw one primitive at the origin, sized `d`.
+function primitive(g, shape, d, P, r){
+  const h = d/2;
+  switch(shape){
+    case 'rect': {
+      const rr = h * P.rounding * .5;
+      if(g.roundRect){ g.beginPath(); g.roundRect(-h,-h,d,d,rr); }
+      else { g.beginPath(); g.rect(-h,-h,d,d); }
+      break;
+    }
+    case 'bar': {
+      const w = d, hh = d*(.18 + .3*P.scale);
+      const rr = Math.min(hh/2, hh/2 * (P.rounding*2));
+      if(g.roundRect){ g.beginPath(); g.roundRect(-w/2,-hh/2,w,hh,rr); }
+      else { g.beginPath(); g.rect(-w/2,-hh/2,w,hh); }
+      break;
+    }
+    case 'circle':
+      g.beginPath(); g.arc(0,0,h,0,Math.PI*2); break;
+    case 'triangle': {
+      g.beginPath();
+      g.moveTo(0,-h); g.lineTo(h*.92, h*.66); g.lineTo(-h*.92, h*.66); g.closePath();
+      break;
+    }
+    case 'lozenge': {
+      g.beginPath();
+      g.moveTo(0,-h); g.lineTo(h*.62,0); g.lineTo(0,h); g.lineTo(-h*.62,0); g.closePath();
+      break;
+    }
+    case 'wave': {
+      g.beginPath();
+      const amp = d*.28;
+      for(let t=-h; t<=h; t+=Math.max(1,d/22)){
+        const yy = Math.sin(t/(h*.55) + r()*3)*amp*(1+P.tension*.5);
+        t===-h ? g.moveTo(t,yy) : g.lineTo(t,yy);
+      }
+      break;
+    }
+    case 'arc': {
+      const a0 = r()*Math.PI*2, sweep = Math.PI*(.5 + P.tension);
+      g.beginPath(); g.arc(0,0,h,a0,a0+sweep);
+      break;
+    }
+    default: { // blob — a wobbling closed contour
+      g.beginPath();
+      const lobes = 3 + Math.floor(r()*3), ph = r()*6.28;
+      for(let k=0;k<=48;k++){
+        const th = k/48*Math.PI*2;
+        const wob = 1 + Math.sin(th*lobes + ph)*.22*(1+P.tension);
+        const x = Math.cos(th)*h*wob, y = Math.sin(th)*h*wob*.86;
+        k===0 ? g.moveTo(x,y) : g.lineTo(x,y);
+      }
+      g.closePath();
+    }
+  }
+}
+
+function drawPattern(cv, tk, seed=0.5, opts={}){
+  if(!cv) return;
+  const dpr  = Math.min(2, window.devicePixelRatio || 1);
+  const rect = cv.getBoundingClientRect();
+  const W = Math.max(1, Math.round((opts.w || rect.width  || 280) * dpr));
+  const H = Math.max(1, Math.round((opts.h || rect.height || 280) * dpr));
+  cv.width=W; cv.height=H;
+  const g = cv.getContext('2d');
+  const P = tk.pattern;
+
+  // The pattern's ground is the page's ground. Anything else and the tile
+  // shows a system the dashboard never renders.
+  if(!opts.transparent){
+    g.fillStyle = hex(tk.colors.surface);
+    g.fillRect(0,0,W,H);
+  }
+
+  const pal = [hex(tk.colors.primary), hex(tk.colors.tertiary), hex(tk.colors.secondary), hex(tk.colors.neutral)];
+  const at  = i => pal[((i%pal.length)+pal.length)%pal.length];
+  const S   = Math.min(W,H);
+  const unit= S * .30 * P.scale;          // base element size
+  const r   = rng(seed+0.77);
+
+  g.save();
+  g.translate(W/2, H/2);
+  g.rotate(P.angle * Math.PI/180);
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+
+  const pts = placements(P, seed);
+  const half = Math.hypot(W,H)/2;
+
+  // ctx.filter is unsupported in a few engines; a missing blur is a far
+  // better failure than a blank canvas, so only set it when it exists.
+  // Scaled to the canvas, not a fixed pixel count, so a tile and a full-bleed
+  // backdrop blur by the same visual amount. Max is 5% of the short edge —
+  // at 26% the top half of the slider was indistinguishable fog.
+  const blurPx = (P.blur||0)/100 * Math.min(W,H) * 0.05 * (opts.blurScale || 1);
+  if(blurPx > 0.4 && 'filter' in g) g.filter = `blur(${round(blurPx,1)}px)`;
+  const alpha = opts.ignoreOpacity ? 1 : clamp((P.opacity==null?100:P.opacity)/100, 0, 1);
+
+  pts.forEach((p,i)=>{
+    g.save();
+    g.strokeStyle = at(i);
+    g.fillStyle   = at(i);
+    g.lineWidth   = P.weight*dpr*1.1;
+    g.globalAlpha = (.30 + .55*Math.abs(Math.sin(i*.9+1))) * (0.45 + alpha*0.85);
+
+    if(p.wave){
+      const y0 = p.y*half*.82, amp = unit*p.amp*.9;
+      g.lineWidth = P.weight*dpr*1.2*p.thick;
+      g.beginPath();
+      for(let t=-half; t<=half; t+=4*dpr){
+        const yy = y0 + Math.sin(t/(half*.42) + p.phase) * amp * (1 + P.tension*.5);
+        t===-half ? g.moveTo(t,yy) : g.lineTo(t,yy);
+      }
+      g.stroke();
+    } else if(p.span){
+      // full-width band or full-height column
+      const t = (p.vertical ? p.x : p.y) * half;
+      const th = unit * .35 * p.thick;
+      g.beginPath();
+      if(p.vertical) g.rect(t-th/2, -half, th, half*2);
+      else           g.rect(-half, t-th/2, half*2, th);
+      P.filled ? g.fill() : g.stroke();
+    } else if(p.ring){
+      g.beginPath();
+      const rr = p.s * half * .92;
+      if(P.shape==='rect' || P.shape==='bar'){
+        const q = rr*1.42;
+        g.rect(-q/2,-q/2,q,q);
+      } else g.arc(0,0,rr,0,Math.PI*2);
+      g.lineWidth = P.weight*dpr*1.6;
+      g.stroke();
+    } else {
+      g.translate(p.x*half*.78, p.y*half*.78);
+      if(P.jitter > .15) g.rotate((r()-.5)*P.jitter*Math.PI*.5);
+      primitive(g, P.shape, unit*p.s, P, r);
+      (P.filled && P.shape!=='wave' && P.shape!=='arc') ? g.fill() : g.stroke();
+    }
+    g.restore();
+  });
+
+  g.restore();
+  if('filter' in g) g.filter = 'none';
+}
+
+function patternSVG(tk, seed=0.5){
+  const P = tk.pattern;
+  const pal = [hex(tk.colors.primary), hex(tk.colors.tertiary), hex(tk.colors.secondary), hex(tk.colors.neutral)];
+  const at  = i => pal[((i%pal.length)+pal.length)%pal.length];
+  const S = 200, half = S/2, unit = S*.30*P.scale;
+  const r = rng(seed+0.77);
+  const pts = placements(P, seed);
+  let body = '';
+
+  const paint = i => P.filled
+    ? `fill="${at(i)}" stroke="none"`
+    : `fill="none" stroke="${at(i)}" stroke-width="${P.weight}" stroke-linejoin="round"`;
+
+  pts.forEach((p,i)=>{
+    const op = round(.30 + .55*Math.abs(Math.sin(i*.9+1)), 2);
+    if(p.wave){
+      const y0 = round(p.y*half*.82,1), amp = unit*p.amp*.9;
+      let d2 = '';
+      for(let t=-half; t<=half; t+=6){
+        const yy = round(y0 + Math.sin(t/(half*.42) + p.phase)*amp*(1+P.tension*.5), 1);
+        d2 += (d2 ? ' L ' : 'M ') + round(t,1) + ' ' + yy;
+      }
+      body += `\n    <path d="${d2}" fill="none" stroke="${at(i)}" stroke-width="${round(P.weight*p.thick,2)}" stroke-linecap="round" opacity="${op}"/>`;
+    } else if(p.span){
+      const t = (p.vertical ? p.x : p.y)*half, th = unit*.35*p.thick;
+      body += p.vertical
+        ? `\n    <rect x="${round(t-th/2,1)}" y="${-half}" width="${round(th,1)}" height="${S}" ${paint(i)} opacity="${op}"/>`
+        : `\n    <rect x="${-half}" y="${round(t-th/2,1)}" width="${S}" height="${round(th,1)}" ${paint(i)} opacity="${op}"/>`;
+    } else if(p.ring){
+      const rr = round(p.s*half*.92, 1);
+      body += (P.shape==='rect'||P.shape==='bar')
+        ? `\n    <rect x="${round(-rr*.71,1)}" y="${round(-rr*.71,1)}" width="${round(rr*1.42,1)}" height="${round(rr*1.42,1)}" fill="none" stroke="${at(i)}" stroke-width="${P.weight}" opacity="${op}"/>`
+        : `\n    <circle cx="0" cy="0" r="${rr}" fill="none" stroke="${at(i)}" stroke-width="${P.weight}" opacity="${op}"/>`;
+    } else {
+      const x = round(p.x*half*.78,1), y = round(p.y*half*.78,1);
+      const d = unit*p.s, h = round(d/2,1);
+      const rot = P.jitter>.15 ? ` rotate(${round((r()-.5)*P.jitter*90,1)})` : '';
+      let el;
+      if(P.shape==='circle')       el = `<circle cx="0" cy="0" r="${h}" ${paint(i)}/>`;
+      else if(P.shape==='triangle')el = `<polygon points="0,${-h} ${round(h*.92,1)},${round(h*.66,1)} ${round(-h*.92,1)},${round(h*.66,1)}" ${paint(i)}/>`;
+      else if(P.shape==='lozenge') el = `<polygon points="0,${-h} ${round(h*.62,1)},0 0,${h} ${round(-h*.62,1)},0" ${paint(i)}/>`;
+      else if(P.shape==='bar')     el = `<rect x="${round(-d/2,1)}" y="${round(-d*(.09+.15*P.scale),1)}" width="${round(d,1)}" height="${round(d*(.18+.3*P.scale),1)}" rx="${round(d*(.09+.15*P.scale)*P.rounding*2,1)}" ${paint(i)}/>`;
+      else if(P.shape==='arc')     el = `<path d="M ${-h} 0 A ${h} ${h} 0 0 1 ${h} 0" fill="none" stroke="${at(i)}" stroke-width="${P.weight}" stroke-linecap="round"/>`;
+      else                          el = `<rect x="${-h}" y="${-h}" width="${round(d,1)}" height="${round(d,1)}" rx="${round(h*P.rounding*.5,1)}" ${paint(i)}/>`;
+      body += `\n    <g transform="translate(${x} ${y})${rot}" opacity="${op}">${el}</g>`;
+    }
+  });
+
+  const blurPx = round((P.blur||0)/100 * S * 0.05, 2);
+  const alpha  = round(clamp((P.opacity==null?100:P.opacity)/100, 0, 1), 2);
+  const defs = blurPx > 0.15
+    ? `\n  <defs><filter id="pb" x="-25%" y="-25%" width="150%" height="150%">`
+      + `<feGaussianBlur stdDeviation="${blurPx}"/></filter></defs>`
+    : '';
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${S}" height="${S}" viewBox="0 0 ${S} ${S}">${defs}
+  <rect width="${S}" height="${S}" fill="${hex(tk.colors.surface)}"/>
+  <g transform="translate(${half} ${half}) rotate(${P.angle})" opacity="${alpha}"${blurPx>0.15?' filter="url(#pb)"':''}>${body}
+  </g>
+</svg>`;
+}
+
+/* ── 8. NAMING ───────────────────────────────────────── */
+const WARM=['Amber','Crimson','Ember','Coral','Ochre','Rust','Sienna','Saffron'];
+const COOL=['Azure','Cobalt','Frost','Slate','Indigo','Steel','Teal','Glacier'];
+const NEUT=['Stone','Ash','Sand','Smoke','Ivory','Graphite','Flint','Chalk'];
+const HIGH=['Storm','Surge','Pulse','Drive','Burst','Rush','Spark','Signal'];
+const LOW =['Drift','Echo','Bloom','Haze','Flow','Veil','Mist','Hollow'];
+function nameFor(a, seed){
+  const pick = (arr,o) => arr[(Math.floor(seed*97)+o) % arr.length];
+  const col = Math.abs(a.temp)<.18 ? pick(NEUT,0) : a.temp>0 ? pick(WARM,1) : pick(COOL,2);
+  const mot = a.energy>.45 ? pick(HIGH,3) : pick(LOW,4);
+  return `${col} ${mot}`;
+}
+function tagsFor(a){
+  const t=[];
+  t.push(a.energy>.65?'Energetic':a.energy>.35?'Balanced':'Serene');
+  t.push(a.temp>.25?'Warm':a.temp<-.25?'Cool':'Neutral');
+  t.push(a.complexity>.65?'Complex':a.complexity>.3?'Layered':'Minimal');
+  t.push(a.angularity>.58?'Angular':a.angularity<.32?'Organic':'Mixed');
+  if(a.avgLum<35) t.push('Dark'); else if(a.avgLum>68) t.push('Light');
+  if(a.clusters.length && Math.max(...a.clusters.map(c=>chroma(c.color))) < 12) t.push('Monochrome');
+  return t;
+}
+
+/* ── 9. LANDING RENDER ───────────────────────────────── */
+const SEEDS = [
+  '10dark','blackdashboard','blueredrun','bluescreensplash',
+  'brightsquare','goast','goldlake','poster100',
+];
+
+/* Seeds are analysed live rather than pre-baked. It costs a moment on
+   load but nothing on the landing page is then a promise the engine
+   can't keep — every tile you see is real output. */
+function renderSeeds(){
+  const el = $('#seeds');
+  el.innerHTML = '';
+  SEEDS.forEach((name, i)=>{
+    const b = document.createElement('button');
+    b.className = 'tile';
+    b.innerHTML = `
+      <div class="pair">
+        <div class="pane"><img alt="" loading="lazy"></div>
+        <div class="pane"><canvas role="img" aria-label="Generated pattern"></canvas><div class="strip" aria-hidden="true"></div>
+          <div class="pane-wait"><span>reading…</span></div></div>
+      </div>
+      <div class="tile-meta">
+        <span class="tile-name">—</span>
+        <span class="tile-sub"></span>
+      </div>`;
+    const img = b.querySelector('img');
+    el.appendChild(b);
+
+    const unavailable = why => {
+      b.classList.add('placeholder');
+      b.querySelector('.tile-name').textContent = why;
+      b.querySelector('.tile-sub').textContent  = name;
+      const w = b.querySelector('.pane-wait');
+      if(w) w.querySelector('span').textContent = '—';
+    };
+
+    // Data URL, not a file path — see seeds-data.js for why.
+    const src = (typeof SEED_DATA !== 'undefined') ? SEED_DATA[name] : null;
+    if(!src){ unavailable('seeds-data.js missing'); return; }
+    img.src = src;
+
+    img.onload = ()=>{
+      // stagger so eight analyses don't block the first paint
+      setTimeout(()=>{
+        try{
+          const analysis = analyze(img);
+          const seed = (i+1)/9;
+          const entry = {
+            id:'seed-'+name, file:name+'.jpg', url:img.src, analysis, seed,
+            name: nameFor(analysis, seed), isSeed:true,
+            swapBody:0, swapLabel:0, exported:false,
+          };
+          entry.tokens = deriveTokens(analysis, freshLevers(), new Set());
+          state.seeds.push(entry);
+          b.querySelector('.tile-name').textContent = entry.name;
+          b.querySelector('.tile-sub').textContent  = `${entry.tokens.pattern.shape} · ${entry.tokens.pattern.layout}`;
+          const strip = b.querySelector('.strip');
+          ['primary','tertiary','secondary','neutral','surface'].forEach(k=>{
+            const s = document.createElement('i');
+            s.style.background = hex(entry.tokens.colors[k]);
+            strip.appendChild(s);
+          });
+          b.querySelector('.pane-wait').remove();
+          drawPattern(b.querySelector('canvas'), entry.tokens, seed);
+          b.onclick = ()=>openDash(entry.id);
+        }catch(err){
+          console.error('seed failed:', name, err);
+          b.querySelector('.tile-name').textContent = 'Could not read';
+          const w = b.querySelector('.pane-wait'); if(w) w.querySelector('span').textContent = 'failed';
+        }
+      }, 90*i + 60);
+    };
+    img.onerror = ()=>unavailable('Image not found');
+  });
+}
+
+function renderMine(){
+  const head = $('#mine-head'), grid = $('#mine');
+  if(!state.entries.length){ head.style.display='none'; grid.style.display='none'; return; }
+  head.style.display='flex'; grid.style.display='grid';
+  $('#mine-count').textContent = `${state.entries.length} · this session only`;
+  grid.innerHTML = '';
+
+  state.entries.forEach(e=>{
+    const b = document.createElement('button');
+    b.className='tile';
+    b.innerHTML = `
+      <div class="pair">
+        <div class="pane"><img src="${e.url}" alt=""></div>
+        <div class="pane"><canvas role="img" aria-label="Generated pattern"></canvas><div class="strip" aria-hidden="true"></div></div>
+      </div>
+      <div class="tile-meta">
+        <span class="tile-name"></span>
+        <span class="tile-sub">${e.tokens.pattern.shape} · ${e.tokens.pattern.layout}</span>
+      </div>`;
+    b.querySelector('.tile-name').textContent = e.name;
+    const strip = b.querySelector('.strip');
+    ['primary','tertiary','secondary','neutral','surface'].forEach(k=>{
+      const i = document.createElement('i');
+      i.style.background = hex(e.tokens.colors[k]);
+      strip.appendChild(i);
+    });
+    b.onclick = ()=>openDash(e.id);
+    grid.appendChild(b);
+    requestAnimationFrame(()=>drawPattern(b.querySelector('canvas'), e.tokens, e.seed));
+  });
+}
+
+/* ── 10. DASHBOARD RENDER ────────────────────────────── */
+/* Page 2 wears the system it describes. Every declaration in the
+   dashboard stylesheet resolves to one of these, so the whole page
+   restyles itself the moment a lever moves. */
+function applySystem(tk){
+  const s = $('#dashboard').style;
+  const c = tk.colors;
+  const set = (k,v)=>s.setProperty(k,v);
+
+  set('--s-bg',        hex(c.surface));
+  set('--s-panel',     hex(c.neutral));
+  set('--s-ink-rgb',   c['on-surface'].join(','));
+  set('--s-primary',   hex(c.primary));
+  set('--s-secondary', hex(c.secondary));
+
+  set('--s-accent', hex(c.tertiary));   // already guaranteed legible by deriveTokens
+
+  set('--s-r',    tk.rounded.md);
+  set('--s-r-sm', tk.rounded.sm);
+  set('--s-r-lg', tk.rounded.lg);
+  set('--s-pad',  tk.spacing.lg);
+  set('--s-gap',  tk.spacing.sm);
+  set('--s-btn-h',   tk.components['button-height']);
+  set('--s-btn-pad',  tk.components['button-padding']);
+  set('--s-chip-h',   tk.components['chip-height']);
+  set('--s-chip-pad', tk.components['chip-padding']);
+  set('--s-input-h',  tk.components['input-height']);
+  set('--s-dur',  tk.motion.duration.fast+'ms');
+  set('--s-ease', tk.motion.easing.standard);
+  set('--s-font',  stackFor(tk.meta.bodyFont));
+  set('--s-label', stackFor(tk.meta.labelFont));
+
+  // body text picks up the generated weight and measure
+  s.setProperty('font-weight',    String(tk.typography['body-md'].w));
+  s.setProperty('line-height',    String(tk.typography['body-md'].lh));
+  s.setProperty('letter-spacing', tk.typography['body-md'].ls+'em');
+}
+
+/* Figure and ground — cartography's oldest layout rule. Ground must stay
+   ground: the backdrop can never be allowed to compete with the text on top.
+
+   The pattern composites its own colours over `surface`, which shifts the
+   effective background under every piece of body text. So rather than trusting
+   a hand-picked opacity, solve for the largest alpha at which on-surface text
+   still clears 4.5:1 against the *worst* blended ground the pattern can make,
+   and cap there. Turn Opacity to 100 and the backdrop stops where legibility
+   stops. */
+function maxBackdropAlpha(tk){
+  const bg = tk.colors.surface, ink = tk.colors['on-surface'];
+  const inks = ['primary','tertiary','secondary','neutral'].map(k=>tk.colors[k]);
+  const blend = (fg, a) => bg.map((v,i)=> fg[i]*a + v*(1-a));
+  for(let a = 0.60; a > 0.008; a -= 0.01)
+    if(inks.every(p => contrast(ink, blend(p, a)) >= 4.5)) return round(a, 3);
+  return 0;
+}
+
+// Full-bleed, low-contrast version of the same pattern.
+function drawBackdrop(tk, seed){
+  const cv = $('#bg-pattern');
+  if(!cv) return;
+  const dpr = Math.min(1.5, window.devicePixelRatio || 1);
+  const W = Math.round((window.innerWidth  || 1200) * dpr);
+  const H = Math.round((window.innerHeight ||  800) * dpr);
+  cv.width = W; cv.height = H;
+  const big = {...tk, pattern:{...tk.pattern,
+    count: Math.max(4, Math.round(tk.pattern.count*0.7)),
+    weight: tk.pattern.weight * 1.9,
+    scale: tk.pattern.scale * 1.45,
+  }};
+  // The lever drives the backdrop, but legibility caps it.
+  const want = clamp((tk.pattern.opacity||0)/100, 0, 1) * 0.42;
+  cv.style.opacity = String(Math.min(want, maxBackdropAlpha(tk)));
+  drawPattern(cv, big, seed, {w:W/dpr, h:H/dpr, transparent:true, ignoreOpacity:true, blurScale:1.6});
+}
+
+function renderDash(){
+  const e = state.active; if(!e) return;
+  const tk = e.tokens, a = e.analysis;
+  applySystem(tk);
+
+  $('#sys-name').style.fontWeight = tk.typography['headline-sm'].w;
+  $('#sys-name').textContent = e.name;
+  $('#sys-tags').innerHTML = tagsFor(a).map(t=>`<span class="tag">${t}</span>`).join('');
+  $('#src-img').src = e.url;
+
+  const sg = $('#sw-grid'); sg.innerHTML='';
+  a.clusters.forEach((c,i)=>{
+    const b = document.createElement('button');
+    const dropped = state.dropped.has(i);
+    b.className = 'sw tap' + (dropped?' off':'');
+    b.style.background = hex(c.color);
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(!dropped));
+    b.setAttribute('aria-label', `Colour ${i+1} of ${a.clusters.length}, ${hex(c.color)}${dropped?' — currently dropped from the palette':' — in the palette'}`);
+    b.title = hex(c.color) + (dropped?' — dropped':'');
+    b.onclick = ()=>{
+      state.dropped.has(i) ? state.dropped.delete(i) : state.dropped.add(i);
+      if(state.dropped.size >= a.clusters.length) state.dropped.delete(i);  // never drop all
+      recompute();
+    };
+    sg.appendChild(b);
+  });
+
+  const pct = v => Math.round(v*100)+'%';
+  $('#readout').innerHTML = [
+    ['energy',        pct(a.energy)],
+    ['temperature',   (a.temp>0?'+':'')+round(a.temp,2)],
+    ['complexity',    pct(a.complexity)],
+    ['angularity',    a.structured ? pct(a.angularity) : 'none'],
+    ['dominant edge', a.structured ? round(a.dominantAngle,1)+'°' : '—'],
+    ['read from',     a.focused ? `subject region · ${pct(a.focusCoverage)}` : 'whole frame'],
+    ['flow',          pct(a.waviness||0)],
+    ['edge softness', pct(a.edgeSoftness||0)],
+    ['overlay panel', a.panelFound ? `${a.panelDarker?'dark':'light'} · ${pct(a.panelCoverage)}` : 'none'],
+    ['avg luminance', pct(a.avgLum/100)],
+  ].map(([k,v])=>`<div class="tok"><span class="tok-k">${k}</span><span class="tok-v">${v}</span></div>`).join('');
+
+  $('#focus-note').textContent = a.focused
+    ? `Structure was measured inside the subject region only — the ${Math.round((1-a.focusCoverage)*100)}% of the frame around it was excluded so background walls and surfaces don't dilute the reading.`
+    : 'No single subject stood out, so the whole frame was measured.';
+
+  renderTokens(tk, a);
+  renderLevers();
+  renderA11y(tk);
+  drawBackdrop(tk, e.seed);
+}
+
+function renderTokens(tk, a){
+  const c = tk.colors;
+  const crPill = k => {
+    const r = contrast(c[k], c.surface);
+    const [lbl, cls] = rate(r);
+    return `<span class="pill ${cls}">${lbl} ${round(r,1)}</span>`;
+  };
+
+  /* live components, built from nothing but the tokens */
+  let html = `<div class="group"><span class="eyebrow">Components · live</span>
+    <div class="demo">
+      <button class="demo-btn tap" style="font-weight:${tk.typography['label-lg'].w}">Primary action</button>
+      <button class="demo-btn ghost2 tap" style="font-weight:${tk.typography['label-lg'].w}">Secondary</button>
+    </div>
+    <div class="demo">
+      <div class="demo-card">
+        <h4 style="font-weight:${tk.typography['headline-sm'].w};letter-spacing:${tk.typography['headline-sm'].ls}em">${state.active ? state.active.name : 'Card title'}</h4>
+        <p>Everything on this page — type, colour, corner radius, spacing and transition speed — is drawn from the tokens below.</p>
+      </div>
+    </div>
+    <p class="tok-why">This page is styled by its own DESIGN.md. Move a lever and the interface restyles with it.</p>
+  </div>`;
+
+  /* colours */
+  html += `<div class="group"><span class="eyebrow">Colors</span>`;
+  for(const [k,v] of Object.entries(c)){
+    html += `<div class="tok">
+      <span class="tok-k">${k}</span>
+      <span class="tok-v" style="display:flex;align-items:center;gap:8px;justify-content:flex-end">
+        ${k==='surface' ? '' : crPill(k)}
+        <i style="width:15px;height:15px;border-radius:4px;display:inline-block;background:${hex(v)};border:1px solid rgba(255,255,255,.18)"></i>
+        ${hex(v)}
+      </span></div>`;
+  }
+  const pc = classifyPalette(c);
+  html += `<div class="tok"><span class="tok-k">palette type</span><span class="tok-v">${pc.type}</span></div>
+    <p class="tok-why" style="padding-top:7px"><b>${pc.type[0].toUpperCase()+pc.type.slice(1)}</b> — ${pc.why}. ${
+      pc.type==='qualitative' ? 'Carries no order: separate categories with it, never magnitude.'
+    : pc.type==='sequential'  ? 'Ordered by lightness: suits magnitude and progression.'
+    : 'Two extremes against a light middle: suits data with a real midpoint.'}</p>
+    <p class="tok-why" style="padding-top:7px">Contrast measured against <b>surface</b> and <b>panel</b>. Failing pairs are flagged, not blocked — the tool proposes, you decide.</p>${
+    tk.meta.monochrome
+    ? `<p class="tok-why" style="padding-top:7px;color:var(--s-accent)"><b>This source is near-monochrome.</b> Its most chromatic colour scores only ${tk.meta.accentChroma}, so there is no real accent to promote — tertiary is another neutral. Reach for the Tone lever to introduce colour, or accept a monochrome system.</p>`
+    : ''}</div>`;
+
+  /* typography */
+  const bf = tk.meta.bodyFont, lf = tk.meta.labelFont;
+  html += `<div class="group"><span class="eyebrow">Typography</span>
+    <div class="font-card">
+      <div class="fc-top">
+        <span class="fc-name" style="font-family:${stackFor(bf)};font-weight:${tk.typography['headline-md'].w}">${bf.name}</span>
+        <span class="mono" style="color:var(--ink-3)">${bf.cat} · wght ${bf.wght}</span>
+        <button type="button" class="font-swap tap" data-swap="body" aria-label="Swap the body typeface for the next best match">Swap</button>
+      </div>
+      <p class="tok-why">${fontWhy(bf, a)}</p>
+    </div>
+    <div class="font-card">
+      <div class="fc-top">
+        <span class="fc-name" style="font-family:${stackFor(lf)};font-size:1.1rem">${lf.name}</span>
+        <span class="mono" style="color:var(--ink-3)">labels · ${lf.cat}</span>
+        <button type="button" class="font-swap tap" data-swap="label" aria-label="Swap the label typeface for the next best match">Swap</button>
+      </div>
+      <p class="tok-why">Carries labels, metadata and technical text.</p>
+    </div>`;
+  for(const [k,t] of Object.entries(tk.typography)){
+    const sample = k.startsWith('headline') ? 'Headline' : k.startsWith('label') ? 'Label' : 'The quick brown fox';
+    html += `<div class="type-row">
+      <span class="type-sample" style="font-family:${stackFor(t.f)};font-size:${clamp(t.size,11,40)}px;font-weight:${t.w};letter-spacing:${t.ls}em;${t.caps?'text-transform:uppercase':''}">${sample}</span>
+      <span class="type-spec">${k} · ${t.size}px / ${t.w}</span>
+    </div>`;
+  }
+  html += `<p class="tok-why" style="padding-top:10px">Weight is driven by the <b>Energy</b> lever through the variable font axis — an in-between position exports a real intermediate weight, not a rounded one.</p></div>`;
+
+  /* shape */
+  html += `<div class="group"><span class="eyebrow">Shapes · rounded</span>`;
+  for(const [k,v] of Object.entries(tk.rounded)){
+    html += `<div class="tok"><span class="tok-k">${k}</span>
+      <span class="tok-v" style="display:flex;align-items:center;gap:9px;justify-content:flex-end">
+        <i style="width:22px;height:15px;display:inline-block;background:${hex(tk.colors.primary)};border-radius:${v==='9999px'?'99px':v}"></i>${v}
+      </span></div>`;
+  }
+  html += `<p class="tok-why" style="padding-top:9px">Radius ${tk.rounded.md} — ${tk.meta.E<.4?'low-energy image, softer corners':tk.meta.E>.66?'high-energy image, sharper corners':'balanced image, moderate corners'}.</p></div>`;
+
+  /* spacing */
+  html += `<div class="group"><span class="eyebrow">Layout · spacing</span>`;
+  for(const [k,v] of Object.entries(tk.spacing))
+    html += `<div class="tok"><span class="tok-k">${k}</span><span class="tok-v">${v}</span></div>`;
+  html += `<p class="tok-why" style="padding-top:9px">Base ${tk.spacing.base}, scaled by the <b>Density</b> lever.</p></div>`;
+
+  /* motion */
+  const m = tk.motion;
+  html += `<div class="group"><span class="eyebrow">Motion<span style="text-transform:none;letter-spacing:0;color:var(--ink-3)"> · proposed spec extension</span></span>`;
+  for(const [k,v] of Object.entries(m.duration)){
+    const fb = m.fallback[k];
+    html += `<div class="tok"><span class="tok-k">duration.${k}</span>
+      <span class="tok-v">${v}ms${fb?` <span style="color:var(--ink-3)">→ ${fb}ms reduced</span>`:''}</span></div>`;
+  }
+  for(const [k,v] of Object.entries(m.easing))
+    html += `<div class="tok"><span class="tok-k">easing.${k}</span><span class="tok-v" style="font-size:.68rem">${v}</span></div>`;
+  html += `<p class="tok-why" style="padding-top:9px">Motion isn't in the DESIGN.md spec yet — this follows the open <b>motion:</b> proposal, and is dropped harmlessly by parsers that don't know it.</p></div>`;
+
+  /* pattern */
+  const P = tk.pattern;
+  html += `<div class="group"><span class="eyebrow">Pattern<span style="text-transform:none;letter-spacing:0;color:var(--ink-3)"> · our extension</span></span>
+    <div class="pat-wrap"><canvas id="pat-big" role="img" aria-label="Generated pattern preview"></canvas></div>
+    <div style="margin-top:12px">`;
+  for(const [k,v] of Object.entries(P))
+    html += `<div class="tok"><span class="tok-k">${k}</span><span class="tok-v">${v}${k==='angle'?'°':''}</span></div>`;
+  html += `<p class="tok-why" style="padding-top:9px">${a.structured
+    ? `Geometry comes from edge detection on the source — dominant edge at <b>${round(a.dominantAngle,1)}°</b>, angularity <b>${Math.round(a.angularity*100)}%</b>. Not derived from colour.`
+    : `Edge detection found <b>no directional structure</b> in this image, so the pattern falls back to a directionless organic form. Nothing has been invented from colour to fill the gap.`}</p>
+    </div></div>`;
+
+  $('#tokens').innerHTML = html;
+
+  $$('[data-swap]').forEach(b=>{
+    b.onclick = ()=>{
+      const key = b.dataset.swap==='body' ? 'swapBody' : 'swapLabel';
+      state.active[key] = (state.active[key]||0)+1;
+      recompute();
+    };
+  });
+  requestAnimationFrame(()=>drawPattern($('#pat-big'), tk, state.active ? state.active.seed : .5));
+}
+
+const LEVERS = [
+  // ── system ──
+  {k:'tone',    g:'system', name:'Tone',    mode:'offset', lo:'cool', hi:'warm',
+   note:'Rotates the whole palette toward warm or cool. Every colour token moves together.'},
+  {k:'energy',  g:'system', name:'Energy',  mode:'offset', lo:'calm', hi:'bold',
+   note:'Type weight, type scale ratio, pattern stroke weight and motion speed.'},
+  {k:'curve',   g:'system', name:'Curve',   mode:'abs', lo:'0 · square', hi:'100 · fully round',
+   note:'Panel and button corner radius, directly. 0 is square; 100 is a 32px corner. Also shapes the easing overshoot.'},
+  {k:'padding', g:'system', name:'Padding', mode:'abs', lo:'0 · tight', hi:'100 · airy',
+   note:'Space inside things — button and chip padding, card and panel padding — plus the base spacing unit (4px to 40px) and base text size.'},
+  {k:'buttonSize', g:'system', name:'Button size', mode:'abs', lo:'0 · compact', hi:'100 · large',
+   note:'Control height, 26px to 56px. Chips and inputs scale with it but stay distinct. The 44px touch target is kept regardless, so a small button is still reachable.'},
+  {k:'speed',   g:'system', name:'Animation speed', mode:'offset', lo:'slow', hi:'fast',
+   note:'Duration tokens — and their reduced-motion fallbacks.'},
+  // ── pattern ──
+  {k:'density', g:'pattern', name:'Grain', mode:'abs', lo:'0 · coarse', hi:'100 · fine',
+   note:'Marks per unit area, after Bertin — size and spacing move together so the pattern gets finer without getting heavier. Weight is left to Opacity.'},
+  {k:'blur',    g:'pattern', name:'Blur',    mode:'abs', lo:'0 · crisp',  hi:'100 · soft',
+   note:'Softens the pattern. Exported as a token, and applied to the page backdrop too.'},
+  {k:'opacity', g:'pattern', name:'Opacity', mode:'abs', lo:'0 · invisible', hi:'100 · full',
+   note:'How present the pattern is, in the tile and behind this page.'},
+];
+
+const SHAPES = ['wave','rect','bar','circle','triangle','lozenge','arc','blob'];
+const DEFAULTS = {curve:defaultCurve, padding:defaultPadding, buttonSize:defaultButtonSize,
+                  density:defaultDensity, blur:defaultBlur, opacity:defaultOpacity};
+
+function leverValue(k){
+  const v = state.levers[k];
+  if(DEFAULTS[k]) return v == null ? DEFAULTS[k](state.active.analysis) : v;
+  return v;
+}
+function fmtLever(k){
+  const L = LEVERS.find(l=>l.k===k);
+  if(L.mode === 'abs'){
+    const v = leverValue(k);
+    return state.levers[k] == null ? `${v} · from image` : String(v);
+  }
+  const v = state.levers[k];
+  return v===0 ? 'image default' : (v>0?'+':'')+Math.round(v*100);
+}
+
+function leverHTML({k,name,mode,lo,hi,note}){
+  const min = mode==='abs' ? 0 : -100;
+  const val = mode==='abs' ? leverValue(k) : Math.round(state.levers[k]*100);
+  return `<div class="lever">
+    <div class="lev-top"><span class="lev-name">${name}</span><span class="lev-val" data-lv="${k}"></span></div>
+    <input type="range" min="${min}" max="100" value="${val}" data-l="${k}" data-mode="${mode}" aria-label="${name}">
+    <div class="lev-ends"><span>${lo}</span><span>${hi}</span></div>
+    <p class="lev-note">${note}</p>
+  </div>`;
+}
+
+function renderLevers(){
+  const el = $('#levers');
+  if(el.dataset.built){
+    LEVERS.forEach(({k,mode})=>{
+      const i = el.querySelector(`input[data-l="${k}"]`);
+      const want = mode==='abs' ? leverValue(k) : Math.round(state.levers[k]*100);
+      if(i && +i.value !== want) i.value = want;
+      el.querySelector(`[data-lv="${k}"]`).textContent = fmtLever(k);
+    });
+    syncShapePicker();
+    return;
+  }
+  el.dataset.built = '1';
+  const sys = LEVERS.filter(l=>l.g==='system').map(leverHTML).join('');
+  const pat = LEVERS.filter(l=>l.g==='pattern').map(leverHTML).join('');
+
+  el.innerHTML = sys
+    + `<div class="lev-group">
+        <span class="eyebrow">Pattern</span>
+        <div class="lever">
+          <div class="lev-top"><span class="lev-name">Shape</span><span class="lev-val" id="shape-val"></span></div>
+          <div class="shape-pick" id="shape-pick" role="radiogroup" aria-label="Pattern shape">${
+            SHAPES.map(sh=>`<button type="button" class="tap" role="radio" aria-checked="false" data-shape="${sh}">${sh}</button>`).join('')
+          }<button type="button" class="tap" role="radio" aria-checked="false" data-shape="">auto</button></div>
+          <p class="lev-note">The primitive is inferred from image geometry, and inference on a busy photograph is not always right. Override it here — the inferred choice stays outlined.</p>
+        </div>
+        ${pat}
+      </div>`;
+
+  el.querySelectorAll('input[data-l]').forEach(i=>{
+    i.addEventListener('input', ()=>{
+      state.levers[i.dataset.l] = i.dataset.mode==='abs' ? +i.value : +i.value/100;
+      recompute();
+    });
+  });
+  el.querySelectorAll('[data-shape]').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      state.levers.shape = b.dataset.shape || null;
+      recompute();
+    });
+  });
+  LEVERS.forEach(({k})=>el.querySelector(`[data-lv="${k}"]`).textContent = fmtLever(k));
+  syncShapePicker();
+}
+
+function syncShapePicker(){
+  const cur = state.active ? state.active.tokens.pattern.shape : '';
+  const sv = $('#shape-val');
+  if(sv) sv.textContent = state.levers.shape ? 'overridden' : `${cur} · from image`;
+  $$('#shape-pick [data-shape]').forEach(b=>{
+    const isAuto = b.dataset.shape === '';
+    const on = isAuto ? !state.levers.shape : state.levers.shape === b.dataset.shape;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-checked', String(on));
+    const inferred = !state.levers.shape && b.dataset.shape === cur;
+    b.classList.toggle('inferred', inferred);
+    b.setAttribute('aria-label', b.dataset.shape
+      ? `${b.dataset.shape}${inferred ? ' — inferred from the image' : ''}`
+      : 'auto — infer the shape from the image');
+  });
+}
+
+function renderA11y(tk){
+  const m = tk.motion;
+  const over = Object.entries(m.duration).filter(([,v])=>v>200);
+  const au = auditAA(tk);
+  const worst = [...au.rows].sort((a,b)=>(a.ratio/a.req)-(b.ratio/b.req))[0];
+
+  $('#a11y').innerHTML = `
+    <span class="eyebrow">Accessibility · WCAG 2.1 AA</span>
+    <div class="a11y-row"><span>${au.pass ? 'All contrast pairs pass' : 'Contrast failure'}</span>
+      <span class="pill ${au.pass?'pass':'fail'}">${au.pass?'AA':'FAIL'}</span></div>
+    <div class="a11y-row"><span>tightest pair</span><span>${worst.label} ${round(worst.ratio,1)}:1</span></div>
+    <div class="a11y-row"><span>smallest type</span><span>${au.minSize}px</span></div>
+    <p class="a11y-why">Every colour is checked against <b>both</b> grounds it can land on — the page and a panel — because a token that passes on one can fail on the other.</p>
+
+    <span class="eyebrow" style="display:block;margin-top:12px">Reduced motion</span>
+    ${over.length
+      ? over.map(([k,v])=>`<div class="a11y-row"><span>${k} ${v}ms</span><span>→ ${m.fallback[k]}ms</span></div>`).join('')
+      : `<div class="a11y-row"><span>all durations ≤ 200ms</span><span>no fallback needed</span></div>`}
+    <p class="a11y-why">Over 200ms reads as deliberate motion rather than a state transition, so WCAG 2.2 wants a reduced-motion path. Emitted automatically.</p>`;
+}
+
+/* Classify the palette the way a cartographer would, after ColorBrewer:
+   sequential (one hue, ordered by lightness), diverging (two opposed hues
+   either side of a light middle), or qualitative (several hues, no order).
+
+   This matters because the export hands someone six colours with no statement
+   about whether they carry order. Using a qualitative set to imply magnitude
+   is one of the standard ways a chart misleads, and the file should say which
+   kind it is rather than leave the reader to guess. */
+function classifyPalette(colors){
+  const keys = ['primary','secondary','tertiary'];
+  const hs = keys.map(k => rgbToHsl(...colors[k]));
+  const chromatic = hs.filter((h,i) => chroma(colors[keys[i]]) > 10);
+
+  const lights = hs.map(h => h[2]);
+  const lightRange = Math.max(...lights) - Math.min(...lights);
+
+  if(chromatic.length <= 1)
+    return {type:'sequential', why:'a single chromatic hue ordered by lightness'};
+
+  // widest hue separation, on the circle
+  let maxSep = 0;
+  for(let i=0;i<chromatic.length;i++) for(let j=i+1;j<chromatic.length;j++){
+    let d = Math.abs(chromatic[i][0] - chromatic[j][0]);
+    if(d > 180) d = 360 - d;
+    if(d > maxSep) maxSep = d;
+  }
+
+  if(maxSep >= 120 && chromatic.length === 2)
+    return {type:'diverging', why:`two opposed hues ${Math.round(maxSep)}° apart`};
+  if(maxSep >= 90)
+    return {type:'qualitative', why:`${chromatic.length} distinct hues spanning ${Math.round(maxSep)}°`};
+  if(lightRange >= 25)
+    return {type:'sequential', why:`one hue family across ${Math.round(lightRange)}% lightness`};
+  return {type:'qualitative', why:'closely related hues with little lightness order'};
+}
+
+/* Every foreground/background pair the rendered interface actually produces,
+   checked at WCAG 2.1 AA. Large text (≥24px, or ≥18.66px at 700+) is allowed
+   the 3:1 large-text threshold; everything else needs 4.5:1; non-text UI
+   boundaries need 3:1. Shared by the dashboard panel and the exported doc so
+   the two can never disagree. */
+function auditAA(tk){
+  const c = tk.colors, T = tk.typography, out = [];
+  const large = t => t.size >= 24 || (t.size >= 18.66 && t.w >= 700);
+  const add = (label, fg, bg, req) => out.push({label, ratio: contrast(fg,bg), req});
+
+  for(const [gname, bg] of [['surface', c.surface], ['panel', c.neutral]]){
+    add(`Body text on ${gname}`,      c['on-surface'], bg, 4.5);
+    add(`Secondary text on ${gname}`, c.secondary,     bg, 4.5);
+    add(`Primary text on ${gname}`,   c.primary,       bg, 4.5);
+    add(`Accent text on ${gname}`,    c.tertiary,      bg, 4.5);
+    add(`Borders on ${gname}`,        c.secondary,     bg, 3);
+    add(`Focus ring on ${gname}`,     c.tertiary,      bg, 3);
+  }
+  add('Primary button label',       c.surface, c.primary,  4.5);
+  add('Primary button hover label', c.surface, c.tertiary, 4.5);
+
+  const sizes = Object.values(T).map(t=>t.size);
+  return {
+    rows: out,
+    pass: out.every(r => r.ratio >= r.req - 0.005),
+    minSize: Math.min(...sizes),
+    largestHeading: Math.max(...sizes),
+    anyLargeAllowance: Object.values(T).some(large),
+  };
+}
+
+/* ── 11. DESIGN.md EXPORT ────────────────────────────────
+   Conforms to the published spec: YAML frontmatter, then
+   body sections in the prescribed order.                  */
+function buildMD(e){
+  const tk = e.tokens, a = e.analysis, m = tk.motion, P = tk.pattern;
+  const bf = tk.meta.bodyFont, lf = tk.meta.labelFont;
+  const tags = tagsFor(a);
+  const gf = f => `https://fonts.googleapis.com/css2?family=${f.name.replace(/ /g,'+')}:wght@${f.wght}&display=swap`;
+  const cPS = contrast(tk.colors.primary, tk.colors.surface);
+
+  /* frontmatter */
+  let y = `---\nversion: alpha\nname: ${e.name}\n`
+        + `description: Generated from ${e.file} — ${tags.join(', ').toLowerCase()}.\ncolors:\n`;
+  for(const [k,v] of Object.entries(tk.colors)) y += `  ${k}: "${hex(v)}"\n`;
+  y += `typography:\n`;
+  for(const [k,t] of Object.entries(tk.typography)){
+    y += `  ${k}:\n    fontFamily: ${t.f.name}\n    fontSize: ${t.size}px\n`
+      +  `    fontWeight: ${t.w}\n    lineHeight: ${t.lh}\n`;
+    if(t.ls) y += `    letterSpacing: ${t.ls}em\n`;
+    y += `    fontVariation: "'wght' ${t.w}"\n`;
+  }
+  y += `rounded:\n`;
+  for(const [k,v] of Object.entries(tk.rounded)) y += `  ${k}: ${v}\n`;
+  y += `spacing:\n`;
+  for(const [k,v] of Object.entries(tk.spacing)) y += `  ${k}: ${v}\n`;
+  const C = tk.components;
+  y += `components:\n`
+    +  `  button-primary:\n    backgroundColor: "{colors.primary}"\n    textColor: "{colors.surface}"\n`
+    +  `    rounded: "{rounded.md}"\n    height: ${C['button-height']}\n    padding: ${C['button-padding']}\n`
+    +  `    minTargetSize: ${C['min-target']}\n    typography: "{typography.label-lg}"\n`
+    +  `  button-primary-hover:\n    backgroundColor: "{colors.tertiary}"\n`
+    +  `  chip:\n    height: ${C['chip-height']}\n    padding: ${C['chip-padding']}\n`
+    +  `    rounded: "{rounded.sm}"\n    minTargetSize: ${C['min-target']}\n`
+    +  `  input:\n    height: ${C['input-height']}\n    padding: ${C['button-padding']}\n`
+    +  `    rounded: "{rounded.md}"\n    borderColor: "{colors.secondary}"\n`
+    +  `  card:\n    backgroundColor: "{colors.surface}"\n    textColor: "{colors.on-surface}"\n`
+    +  `    rounded: "{rounded.lg}"\n    padding: ${C['card-padding']}\n`
+    +  `  panel:\n    backgroundColor: "{colors.neutral}"\n    rounded: "{rounded.md}"\n`
+    +  `    padding: ${C['panel-padding']}\n`;
+  y += `pattern:\n`
+    +  `  shape: ${P.shape}\n  layout: ${P.layout}\n  angle: ${P.angle}deg\n`
+    +  `  count: ${P.count}\n  grain: ${tk.meta.density}\n  blur: ${round(P.blur/100*14,1)}px\n`
+    +  `  opacity: ${round(P.opacity/100,2)}\n  strokeWidth: ${P.weight}px\n`
+    +  `  fill: ${P.filled ? 'solid' : 'none'}\n`;
+  y += `motion:\n  duration:\n`;
+  for(const [k,v] of Object.entries(m.duration)) y += `    ${k}: ${v}ms\n`;
+  y += `  easing:\n`;
+  for(const [k,v] of Object.entries(m.easing)) y += `    ${k}: "${v}"\n`;
+  if(Object.keys(m.fallback).length){
+    y += `  prefers-reduced-motion-fallback:\n`;
+    for(const [k,v] of Object.entries(m.fallback)) y += `    ${k}: ${v}ms\n`;
+  }
+  y += `---\n`;
+
+  const [tEnergy,tTemp,tCplx,tForm] = tags;
+
+  /* body — spec's prescribed section order */
+  const body = `
+# ${e.name}
+
+Derived from \`${e.file}\` on ${new Date().toISOString().slice(0,10)} by makedesignMD.
+
+## Overview
+
+A ${tEnergy.toLowerCase()}, ${tTemp.toLowerCase()} system with a ${tForm.toLowerCase()} formal language, drawn from a ${tCplx.toLowerCase()} source image.
+
+The palette carries the image's own colour relationships rather than an idealised
+version of them, which keeps the system specific rather than generic. ${
+a.energy > .6  ? 'High saturation variance in the source pushes the system toward bold weights, tighter corners and quick, decisive motion.'
+: a.energy < .35 ? 'Low saturation variance keeps the system quiet — lighter weights, softer corners and unhurried motion.'
+: 'Moderate saturation variance gives a balanced system that can carry both dense interfaces and editorial layouts.'}
+
+${!a.structured
+? 'Edge analysis found no directional structure in the source, so the shape language is soft and the pattern is directionless. Nothing here was inferred from colour to compensate.'
+: a.angularity > .58
+? `Edge analysis found strong directional structure with a dominant edge at ${round(a.dominantAngle,1)}°, so the shape language leans geometric and the pattern is built from straight runs.`
+: a.angularity < .32
+? 'Edge analysis found little directional structure, so the shape language is soft and the pattern is built from organic curves.'
+: `Edge analysis found mixed structure with a dominant edge at ${round(a.dominantAngle,1)}°, giving a woven pattern that is neither strictly geometric nor fully organic.`}
+
+${a.focused ? `Structure was read from the subject region of the image — about ${Math.round(a.focusCoverage*100)}% of the frame — rather than the whole picture, so surrounding background did not dilute the measurements.\n` : ''}
+## Colors
+
+- **Primary (${hex(tk.colors.primary)}):** the dominant colour of the source, for core interface elements and text.
+- **Secondary (${hex(tk.colors.secondary)}):** the second most present colour, for borders, metadata and supporting elements.
+- **Tertiary (${hex(tk.colors.tertiary)}):** the most saturated colour in the source, reserved for primary actions and highlights. Use sparingly.
+- **Neutral (${hex(tk.colors.neutral)}):** a desaturated derivative of the lightest region, for page backgrounds.
+- **Surface (${hex(tk.colors.surface)}):** near-white carrying a trace of the image's hue, for cards and raised areas.
+- **On-surface (${hex(tk.colors['on-surface'])}):** derived from the darkest region and pinned to a legible luminance rather than taken raw.
+
+Contrast of primary on surface is **${round(cPS,2)}:1** (${rate(cPS)[0]}).
+
+${(()=>{const pc=classifyPalette(tk.colors); return `**This is a ${pc.type} palette** — ${pc.why}.
+
+${pc.type==='qualitative'
+? 'Qualitative sets carry no order. Use these hues to separate categories, never to imply magnitude, rank or progression — a reader will infer an order that is not there.'
+: pc.type==='sequential'
+? 'Sequential sets are ordered low to high by lightness. They suit magnitude and progression. Do not use them for unordered categories.'
+: 'Diverging sets emphasise both extremes against a light middle. They suit data with a meaningful midpoint — a target, a zero, an average. Do not use one where there is no natural centre.'}`;})()}
+${tk.meta.monochrome
+? `\nThis source is near-monochrome — its most chromatic colour scores only ${tk.meta.accentChroma} out of 100, so **tertiary is not a true accent**. Treat this as a neutral system and introduce a highlight colour deliberately from outside the image if one is needed.`
+: ''}
+
+## Typography
+
+Set in **${bf.name}** — ${fontWhy(bf, a)}
+
+**${lf.name}** carries labels, metadata and technical text.
+
+Load from Google Fonts:
+
+\`\`\`
+${gf(bf)}
+${gf(lf)}
+\`\`\`
+
+Both are variable fonts, so \`fontVariation\` carries exact weights rather than
+rounding to the nearest hundred. The scale uses a ratio of **${round(tk.meta.ratio,3)}**
+from a **${tk.meta.base}px** base.
+
+## Layout
+
+A **${tk.spacing.base}** base unit with a proportional scale, from Padding set at
+**${tk.meta.padding} of 100**. Panels use ${tk.spacing.lg}, buttons ${tk.spacing.sm}, and
+every gap in the interface is a multiple of the base.
+
+${tk.meta.padding < 30 ? 'Tight spacing — suits dense, information-heavy interfaces.'
+: tk.meta.padding > 68 ? 'Generous spacing — suits editorial and marketing layouts with room to breathe.'
+: 'Mid-scale spacing, workable for both dense tools and editorial layouts.'}
+
+## Elevation & Depth
+
+${a.panelFound
+? `The source contains a large ${a.panelDarker ? 'dark' : 'light'} overlay panel covering roughly ${Math.round(a.panelCoverage*100)}% of the frame — a translucent surface laid over busier content beneath. The system follows that: depth is expressed as **layered translucent panels** over the background, not as drop shadows. Use \`neutral\` at 88–92% opacity over \`surface\` so the pattern behind stays faintly legible.`
+: 'Depth comes from **tonal layering** rather than shadow. Surface sits above neutral, and borders in secondary at low opacity separate regions. This suits a palette drawn from a photograph, where heavy shadows would compete with the colour relationships the system is built on.'}
+
+The generated pattern is **ground, never figure**. Where it sits behind content
+its opacity is capped at the point where body text would drop below 4.5:1
+against the worst ground the pattern can composite — legibility bounds the
+decoration, not taste.
+
+${tk.meta.dark
+? 'This is a **dark system** — the source image is predominantly dark, so surface is a deep tone carrying the image\'s own hue rather than a neutral grey. Elevated surfaces get *lighter*, not darker.'
+: 'This is a **light system**. Elevated surfaces get lighter; recessed areas step down to `neutral`.'}
+
+## Shapes
+
+Corner radius of **${tk.rounded.md}** across interactive elements, scaling to
+${tk.rounded.lg} for containers and ${tk.rounded.sm} for small controls.
+
+Curve is set to **${tk.meta.curve} of 100** — ${
+tk.meta.curve < 12 ? 'effectively square, an engineered and rigid shape language.'
+: tk.meta.curve < 40 ? 'a restrained radius that softens edges without making them friendly.'
+: tk.meta.curve < 70 ? 'a clearly rounded language, approachable but still structured.'
+: 'strongly rounded throughout, soft and informal.'}
+
+## Components
+
+Sizes are deliberately not uniform — a button, a chip and a card carry different
+weight, so they take related but distinct values from one scale.
+
+| Component | Height | Padding |
+|---|---|---|
+| Button | ${tk.components['button-height']} | ${tk.components['button-padding']} |
+| Chip | ${tk.components['chip-height']} | ${tk.components['chip-padding']} |
+| Input | ${tk.components['input-height']} | ${tk.components['button-padding']} |
+| Card | — | ${tk.components['card-padding']} |
+| Panel | — | ${tk.components['panel-padding']} |
+
+Button height comes from the Button size control (**${tk.meta.buttonSize} of 100**);
+the padding *inside* it comes from Padding (**${tk.meta.padding} of 100**). The two
+are independent, so you can have a compact button with generous internal spacing
+or the reverse.
+
+**Interactive targets stay at least ${tk.components['min-target']} regardless of visual size.**
+Where a control is drawn smaller than that, extend its hit area rather than its
+box — an invisible pseudo-element or equivalent. Sizing a control down should not
+make it harder to hit (WCAG 2.5.5).
+
+Primary buttons use **primary** with **surface** text; hover moves to
+**tertiary**; secondary buttons invert to an outline in **secondary**.
+
+## Do's and Don'ts
+
+- Do use **tertiary** for the single most important action on a screen
+- Don't use tertiary for large background areas — it is the loudest colour in the system
+- Do keep to the ${tk.spacing.base} spacing scale rather than arbitrary values
+- Don't mix this radius scale with square corners in the same view
+- Do respect \`prefers-reduced-motion\` for any duration above 200ms
+- Don't use more than two weights of ${bf.name} on a single screen
+
+## Motion
+
+Durations of ${m.duration.fast}ms, ${m.duration.medium}ms and ${m.duration.slow}ms for fast, medium and slow transitions,
+with easing defined in the frontmatter.
+
+${Object.keys(m.fallback).length
+? `Durations above 200ms read as deliberate motion rather than state change, so a reduced-motion path is defined for ${Object.keys(m.fallback).join(' and ')}. Respect \`prefers-reduced-motion\`.`
+: 'All durations sit at or below 200ms, so they read as state transitions and need no reduced-motion fallback.'}
+
+## Pattern
+
+A **${P.shape}** primitive in a **${P.layout}** arrangement on a **${P.angle}°** axis — ${P.count} elements, ${P.filled?'solid fill':'stroked outline'}, stroke weight ${P.weight}.
+
+Grain ${tk.meta.density}/100 (${P.count} marks, element scale ${P.scale}, stroke ${P.weight}), blur ${round(P.blur/100*14,1)}px, opacity ${round(P.opacity/100,2)}.
+
+Grain follows Bertin: raising it makes the texture finer by shrinking marks and
+spacing together, holding the ink ratio roughly constant, so the pattern's
+*value* stays put. Weight is Opacity's job, not grain's. The pattern is drawn on \`surface\`, so it sits on the same ground as the interface rather than on a colour of its own.
+
+The geometry is taken from structural analysis of the source image rather than from
+its colour — the axis is the source's dominant edge direction. ${
+state.levers.shape
+? `The primitive was **set by hand** rather than inferred; the inferred value is recorded in Source below.`
+: `The primitive was inferred from the image (flow ${Math.round((tk.pattern.flowStrength||0)*100)}%, rectilinearity ${Math.round(a.rectilinearity*100)}%).`} See \`pattern.svg\`.
+
+## Accessibility
+
+This system was generated to meet **WCAG 2.1 AA** and verified at export.
+
+${(()=>{const au=auditAA(tk);
+  return `| Pair | Ratio | Required | |\n|---|---|---|---|\n`
+    + au.rows.map(r=>`| ${r.label} | ${round(r.ratio,2)}:1 | ${r.req}:1 | ${r.ratio>=r.req-0.005?'PASS':'FAIL'} |`).join('\n');
+})()}
+
+- Colours are checked against **both** grounds they can land on — \`surface\` and \`neutral\` — because a token that clears 4.5:1 on the page can sit below it on a panel.
+- Smallest type size is **${auditAA(tk).minSize}px**; nothing is generated below 11px.
+- Non-text UI boundaries (borders, focus rings) use \`secondary\` and \`tertiary\`, both above the 3:1 required by 1.4.11.
+- ${Object.keys(m.fallback).length ? `Durations above 200ms carry a \`prefers-reduced-motion-fallback\` (2.3.3).` : `All durations are at or below 200ms, so no reduced-motion path is required (2.3.3).`}
+
+**Not covered by generation, and still yours to check:** keyboard order and
+focus management in your own components (2.1.1, 2.4.3, 2.4.7), touch target
+sizes (2.5.5 — the spacing scale supports 44px targets but does not enforce
+them), form labelling (3.3.2), and name/role/value on interactive elements
+(4.1.2). Tokens can guarantee contrast and scale; they cannot guarantee markup.
+
+## Source
+
+- Image: \`${e.file}\`
+- ${a.structured ? `Dominant edge angle ${round(a.dominantAngle,1)}° · angularity ${Math.round(a.angularity*100)}%` : 'No directional structure detected — pattern is directionless'}
+- Energy ${Math.round(a.energy*100)}% · temperature ${round(a.temp,2)} · complexity ${Math.round(a.complexity*100)}%
+- Flow ${Math.round((a.waviness||0)*100)}% · edge softness ${Math.round((a.edgeSoftness||0)*100)}% · ${a.focused ? `read from subject region (${Math.round(a.focusCoverage*100)}% of frame)` : 'read from whole frame'}
+- ${a.panelFound ? `Overlay panel detected: ${a.panelDarker?'darker':'lighter'} than surroundings, ${Math.round(a.panelCoverage*100)}% of frame` : 'No overlay panel detected'}
+- Theme: ${tk.meta.dark ? 'dark (source luminance below threshold)' : 'light'}
+- Curve ${tk.meta.curve}/100 · Padding ${tk.meta.padding}/100 · Button size ${tk.meta.buttonSize}/100
+- Pattern: grain ${tk.meta.density}/100 · blur ${tk.meta.blur}/100 · opacity ${tk.meta.opacity}/100
+- Palette class: ${classifyPalette(tk.colors).type}${state.levers.shape ? ` · shape overridden to "${state.levers.shape}"` : ''}
+- Lever positions: tone ${round(state.levers.tone,2)}, energy ${round(state.levers.energy,2)}, curve ${round(state.levers.curve,2)}, speed ${round(state.levers.speed,2)}, density ${round(state.levers.density,2)}
+`;
+  return y + body;
+}
+
+// Structural check standing in for the official @google/design.md linter
+function lintMD(md){
+  const errs = [];
+  if(!md.startsWith('---\n')) errs.push('missing frontmatter');
+  if(!/\ncolors:\n\s+primary:/.test(md)) errs.push('colors.primary is required');
+  const heads = [...md.matchAll(/^## (.+)$/gm)].map(m=>m[1]);
+  const dupe = heads.find((h,i)=>heads.indexOf(h)!==i);
+  if(dupe) errs.push('duplicate section: '+dupe);
+  const order = ['Overview','Colors','Typography','Layout','Elevation & Depth','Shapes','Components',"Do's and Don'ts"];
+  const idx = heads.filter(h=>order.includes(h)).map(h=>order.indexOf(h));
+  if(idx.some((v,i)=>i>0 && v<idx[i-1])) errs.push('sections out of prescribed order');
+  return errs;
+}
+
+/* ── 12. FLOW ────────────────────────────────────────── */
+const freshLevers = () => ({tone:0, energy:0, speed:0, curve:null, padding:null,
+  buttonSize:null, density:null, blur:null, opacity:null, shape:null});
+
+function tokensFor(e){
+  const tk = deriveTokens(e.analysis, state.levers, state.dropped);
+  const sb = e.swapBody||0, sl = e.swapLabel||0;
+  if(sb || sl){
+    const bf = pickFont(e.analysis,'body',sb), lf = pickFont(e.analysis,'label',sl);
+    loadFont(bf); loadFont(lf);
+    for(const [k,t] of Object.entries(tk.typography)) t.f = k.startsWith('label') ? lf : bf;
+    tk.meta.bodyFont = bf; tk.meta.labelFont = lf;
+  }
+  return tk;
+}
+function recompute(){
+  if(!state.active) return;
+  state.active.tokens = tokensFor(state.active);
+  renderDash();
+}
+
+let ldTimer;
+function showLoader(){
+  $('#loader').classList.add('on'); $('#loader').setAttribute('aria-hidden','false');
+  const msgs = ['Reading image…','Clustering colour…','Detecting edges…','Deriving tokens…','Choosing type…'];
+  let p=0, i=0;
+  clearInterval(ldTimer);
+  ldTimer = setInterval(()=>{
+    p = Math.min(96, p + 7 + Math.random()*11);
+    $('#ld-fill').style.width = p+'%';
+    if(p > (i+1)*19 && i < msgs.length-1) $('#ld-msg').textContent = msgs[++i];
+  }, 90);
+}
+function hideLoader(){
+  clearInterval(ldTimer);
+  $('#ld-fill').style.width = '100%';
+  setTimeout(()=>{ $('#loader').classList.remove('on'); $('#loader').setAttribute('aria-hidden','true'); $('#ld-fill').style.width='0'; $('#ld-msg').textContent='Reading image…'; }, 200);
+}
+
+function handleFile(file){
+  if(!file || !file.type.startsWith('image/')) return;
+  showLoader();
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = ()=>{
+    setTimeout(()=>{
+      try{
+        const analysis = analyze(img);
+        const seed = Math.random();
+        const entry = {
+          id: 'e'+Date.now()+Math.floor(Math.random()*999),
+          file: file.name || 'upload.png',
+          url, analysis, seed,
+          name: nameFor(analysis, seed),
+          swapBody:0, swapLabel:0, exported:false,
+        };
+        state.levers  = freshLevers();
+        state.dropped = new Set();
+        entry.tokens  = tokensFor(entry);
+        state.entries.unshift(entry);
+        hideLoader();
+        renderMine();
+        openDash(entry.id);
+      }catch(err){
+        hideLoader();
+        console.error(err);
+        alert('Something went wrong analysing that image.');
+      }
+    }, 380);
+  };
+  img.onerror = ()=>{ hideLoader(); alert('Could not read that image.'); };
+  img.src = url;
+}
+
+function openDash(id){
+  const e = state.entries.find(x=>x.id===id) || state.seeds.find(x=>x.id===id);
+  if(!e) return;
+  state.active  = e;
+  state.levers  = freshLevers();
+  state.dropped = new Set();
+  delete $('#levers').dataset.built;
+  e.tokens = tokensFor(e);
+  $('#landing').classList.remove('on');
+  $('#dashboard').classList.add('on');
+  window.scrollTo(0,0);
+  renderDash();
+}
+function goHome(){
+  if(state.active && !state.active.exported && !state.active.isSeed){
+    const ok = confirm(`"${state.active.name}" hasn't been exported.\n\nNothing is stored — if you close this tab it's gone. Go back anyway?`);
+    if(!ok) return;
+  }
+  // recompute the tile pattern so the gallery reflects any lever changes
+  if(state.active) state.active.tokens = tokensFor(state.active);
+  $('#dashboard').classList.remove('on');
+  $('#landing').classList.add('on');
+  state.active = null;
+  renderMine();
+  window.scrollTo(0,0);
+}
+
+/* ── wiring ── */
+$('#up1').onclick   = ()=>$('#file').click();
+$('#file').onchange = ev => { handleFile(ev.target.files[0]); ev.target.value=''; };
+$('#back').onclick  = goHome;
+$('#reset').onclick = ()=>{
+  state.levers  = freshLevers();
+  state.dropped = new Set();
+  if(state.active){ state.active.swapBody=0; state.active.swapLabel=0; }
+  delete $('#levers').dataset.built;
+  recompute();
+};
+$('#export').onclick = ()=>{
+  if(!state.active) return;
+  const md = buildMD(state.active);
+  $('#md-out').textContent = md;
+  const errs = lintMD(md);
+  $('#lint-msg').textContent = errs.length ? errs[0] : 'structure valid · spec order confirmed';
+  $('#lint').style.color = errs.length ? '#f87171' : '#4ade80';
+  openSheet();
+  state.active.exported = true;
+};
+// 2.1.2 no keyboard trap / 2.4.3 focus order: the dialog keeps focus inside
+// while open and hands it back to whatever opened it on close.
+let sheetOpener = null;
+function openSheet(){
+  sheetOpener = document.activeElement;
+  const sh = $('#sheet');
+  sh.classList.add('on');
+  sh.setAttribute('aria-hidden','false');
+  $('#dashboard').setAttribute('aria-hidden','true');
+  setTimeout(()=>$('#sheet-close').focus(), 30);
+}
+function closeSheet(){
+  const sh = $('#sheet');
+  if(!sh.classList.contains('on')) return;
+  sh.classList.remove('on');
+  sh.setAttribute('aria-hidden','true');
+  $('#dashboard').removeAttribute('aria-hidden');
+  if(sheetOpener && sheetOpener.focus) sheetOpener.focus();
+}
+$('#sheet-close').onclick = closeSheet;
+$('#sheet').addEventListener('click', ev=>{ if(ev.target.id==='sheet') closeSheet(); });
+document.addEventListener('keydown', ev=>{
+  const sh = $('#sheet');
+  if(!sh.classList.contains('on')) return;
+  if(ev.key === 'Escape'){ closeSheet(); return; }
+  if(ev.key !== 'Tab') return;
+  const f = [...sh.querySelectorAll('button, [href], input, [tabindex]:not([tabindex="-1"])')]
+              .filter(el => el.offsetParent !== null || el.tagName === 'PRE');
+  if(!f.length) return;
+  const first = f[0], last = f[f.length-1];
+  if(ev.shiftKey && document.activeElement === first){ ev.preventDefault(); last.focus(); }
+  else if(!ev.shiftKey && document.activeElement === last){ ev.preventDefault(); first.focus(); }
+});
+
+function download(name, text, type='text/markdown'){
+  const u = URL.createObjectURL(new Blob([text],{type}));
+  const a = document.createElement('a');
+  a.href=u; a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(u), 800);
+}
+$('#dl').onclick     = ()=>download('DESIGN.md', $('#md-out').textContent);
+$('#dl-svg').onclick = ()=>download('pattern.svg', patternSVG(state.active.tokens, state.active.seed), 'image/svg+xml');
+$('#copy').onclick   = async ()=>{
+  try{ await navigator.clipboard.writeText($('#md-out').textContent); $('#copy').textContent='Copied'; }
+  catch{ $('#copy').textContent='Copy failed'; }
+  setTimeout(()=>{ $('#copy').textContent='Copy to clipboard'; }, 1600);
+};
+
+/* drag & drop anywhere */
+let dragDepth = 0;
+window.addEventListener('dragenter', e=>{ e.preventDefault(); if(++dragDepth===1) document.body.classList.add('dragging'); });
+window.addEventListener('dragover',  e=>e.preventDefault());
+window.addEventListener('dragleave', ()=>{ if(--dragDepth<=0){ dragDepth=0; document.body.classList.remove('dragging'); } });
+window.addEventListener('drop', e=>{
+  e.preventDefault(); dragDepth=0; document.body.classList.remove('dragging');
+  if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+
+let rzTimer;
+window.addEventListener('resize', ()=>{
+  clearTimeout(rzTimer);
+  rzTimer = setTimeout(()=>{
+    if(state.active && $('#dashboard').classList.contains('on')){
+      drawPattern($('#pat-big'), state.active.tokens, state.active.seed);
+      drawBackdrop(state.active.tokens, state.active.seed);
+    }
+    else state.entries.length && renderMine();
+  }, 160);
+});
+
+renderSeeds();
+</script>
 </body>
 </html>
