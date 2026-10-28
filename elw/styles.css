@@ -26,6 +26,8 @@ html, body {
   line-height: 1;
   margin-bottom: 10px;
   user-select: none;
+  transform-origin: center;
+  will-change: transform, filter, opacity;
 }
 
 /* Pull hyphen tightly against adjacent letters */

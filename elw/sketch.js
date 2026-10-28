@@ -13,9 +13,31 @@ const REPEL_FORCE    = 4.2;
 const SPRING         = 0.038;
 const DAMPING        = 0.87;
 const DRIFT          = 0.22;  // noise amplitude
+const HOLD  = 9000;   // dissolve loop timings (ms)
+const OUT   = 2600;
+const FLOAT = 1800;
+const IN    = 2800;
+const CYCLE = HOLD + OUT + FLOAT + IN;
+const SWEEP = 1400;   // left→right stagger across the face
+const PARALLAX = 22;  // max depth offset (px)
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const logo = document.querySelector('.logotype');
 let particles  = [];
-let mouse      = { x: -999, y: -999 };
+let mouse      = { x: -999, y: -999, active: false };
 let raf        = null;
+let tilt       = { x: 0, y: 0 };
+let energy     = 0;
+
+const smooth = u => { u = Math.min(1, Math.max(0, u)); return u * u * (3 - 2 * u); };
+
+function cohesionAt(ms) {
+  if (reduceMotion) return 1;
+  const m = ((ms % CYCLE) + CYCLE) % CYCLE;
+  if (m < HOLD)               return 1;
+  if (m < HOLD + OUT)         return 1 - smooth((m - HOLD) / OUT);
+  if (m < HOLD + OUT + FLOAT) return 0;
+  return smooth((m - HOLD - OUT - FLOAT) / IN);
+}
 // ── Resize canvas to fit available space ─────
 function resize() {
   const vw = window.innerWidth;
@@ -73,7 +95,17 @@ function buildFromImage(img) {
     vx: 0, vy: 0,
     phase: Math.random() * Math.PI * 2,
     size:  0.8 + Math.random() * 1.4,
+    sweep: p.nx,
   }));
+  // Pseudo-depth: face centre sits nearest the viewer, rim furthest back
+  const cx = particles.reduce((s, p) => s + p.hx, 0) / particles.length;
+  const cy = particles.reduce((s, p) => s + p.hy, 0) / particles.length;
+  const rmax = Math.max(...particles.map(p => Math.hypot(p.hx - cx, p.hy - cy))) || 1;
+  for (const p of particles) {
+    const r = Math.hypot(p.hx - cx, p.hy - cy) / rmax;
+    p.z = Math.max(-1, Math.min(1, (1 - r) * 1.6 - 0.6 + (Math.random() - 0.5) * 0.3));
+  }
+  particles.sort((a, b) => a.z - b.z);
   startLoop();
 }
 // ── Animation loop ────────────────────────────
@@ -87,7 +119,17 @@ function draw(t) {
   // Trail fade
   ctx.fillStyle = 'rgba(0,0,0,0.28)';
   ctx.fillRect(0, 0, W, H);
+
+  // Tilt follows the mouse; idles in a slow sway when there is none
+  const tgx = mouse.active ? Math.max(-1, Math.min(1, (mouse.x - W / 2) / (W / 2))) : Math.sin(t * 0.00031) * 0.35;
+  const tgy = mouse.active ? Math.max(-1, Math.min(1, (mouse.y - H / 2) / (H / 2))) : Math.cos(t * 0.00023) * 0.25;
+  tilt.x += (tgx - tilt.x) * 0.06;
+  tilt.y += (tgy - tilt.y) * 0.06;
+
+  let speedSum = 0;
   for (const p of particles) {
+    const c    = cohesionAt(t - p.sweep * SWEEP);
+    const free = 1 - c;
     // Spring toward home
     const dx = p.hx - p.x;
     const dy = p.hy - p.y;
@@ -96,25 +138,55 @@ function draw(t) {
     const mdy = p.y - mouse.y;
     const md  = Math.sqrt(mdx * mdx + mdy * mdy) || 1;
     const mf  = md < REPEL_RADIUS ? (REPEL_RADIUS - md) / REPEL_RADIUS * REPEL_FORCE : 0;
-    p.vx += dx * SPRING
+    p.vx += dx * SPRING * c
           + Math.sin(t * 0.0007 + p.phase)       * DRIFT
-          + (mdx / md) * mf;
-    p.vy += dy * SPRING
+          + (mdx / md) * mf
+          + free * (0.025 + Math.sin(p.y * 0.018 + t * 0.0009 + p.phase) * 0.05);
+    p.vy += dy * SPRING * c
           + Math.cos(t * 0.0005 + p.phase + 1.3) * DRIFT
-          + (mdy / md) * mf;
-    p.vx *= DAMPING;
-    p.vy *= DAMPING;
+          + (mdy / md) * mf
+          + free * (-0.035 + Math.cos(p.x * 0.018 + t * 0.0007) * 0.05);
+    const damp = DAMPING + (0.945 - DAMPING) * free;
+    p.vx *= damp;
+    p.vy *= damp;
     p.x  += p.vx;
     p.y  += p.vy;
-    // Brightness varies with distance from home
-    const dist   = Math.sqrt(dx * dx + dy * dy);
-    const alpha  = Math.max(0.15, Math.min(0.9, 1 - dist / 120));
+    speedSum += Math.abs(p.vx) + Math.abs(p.vy);
+    // Brightness varies with distance from home and depth
+    const dist  = Math.sqrt(dx * dx + dy * dy);
+    const depth = (p.z + 1) / 2;
+    const alpha = Math.max(0.15, Math.min(0.9, 1 - dist / 120)) * (0.55 + 0.45 * depth);
     ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.arc(p.x + p.z * tilt.x * PARALLAX,
+            p.y + p.z * tilt.y * PARALLAX,
+            p.size * (0.75 + 0.5 * depth), 0, Math.PI * 2);
     ctx.fillStyle = `rgba(255,255,255,${alpha})`;
     ctx.fill();
   }
   ctx.restore();
+
+  const avg = particles.length ? speedSum / particles.length : 0;
+  energy += (Math.min(1, Math.max(0, (avg - 0.4) / 2.5)) - energy) * 0.1;
+  updateLogo(t, cohesionAt(t - SWEEP / 2));
+}
+
+// Logotype mirrors the field: sways with tilt, fades with dissolve, glitches with energy
+function updateLogo(t, c) {
+  if (!logo) return;
+  let jx = 0, shadow = 'none';
+  if (!reduceMotion) {
+    const g = Math.min(1, energy * 1.2 + (c > 0.02 && c < 0.98 ? 0.35 : 0));
+    if (Math.random() < g * 0.45) {
+      jx = (Math.random() - 0.5) * 12 * g;
+      const s = (2 + Math.random() * 4) * g;
+      shadow = `${-s}px 0 rgba(255,255,255,0.55), ${s}px 0 rgba(232,0,13,0.75)`;
+    }
+  }
+  const pulse = 1 + 0.012 * Math.sin(t * 0.0011) * c + 0.05 * energy;
+  logo.style.transform  = `translate(${-tilt.x * 6 + jx}px, ${-tilt.y * 4}px) scale(${pulse})`;
+  logo.style.textShadow = shadow;
+  logo.style.opacity    = 0.35 + 0.65 * c;
+  logo.style.filter     = c < 0.99 ? `blur(${(1 - c) * 2.5}px)` : 'none';
 }
 function startLoop() {
   if (raf) cancelAnimationFrame(raf);
@@ -133,15 +205,20 @@ window.addEventListener('mousemove', e => {
   const rect = canvas.getBoundingClientRect();
   mouse.x = e.clientX - rect.left;
   mouse.y = e.clientY - rect.top;
+  mouse.active = true;
 });
-window.addEventListener('mouseleave', () => {
-  mouse.x = -999; mouse.y = -999;
+document.addEventListener('mouseleave', () => {
+  mouse.x = -999; mouse.y = -999; mouse.active = false;
+});
+window.addEventListener('touchend', () => {
+  mouse.x = -999; mouse.y = -999; mouse.active = false;
 });
 window.addEventListener('touchmove', e => {
   const rect = canvas.getBoundingClientRect();
   const t    = e.touches[0];
   mouse.x = t.clientX - rect.left;
   mouse.y = t.clientY - rect.top;
+  mouse.active = true;
 }, { passive: true });
 window.addEventListener('resize', () => {
   resize();
