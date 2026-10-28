@@ -7,7 +7,7 @@
 const canvas  = document.getElementById('canvas');
 const ctx     = canvas.getContext('2d');
 const DARK_THRESHOLD = 140;   // pixel brightness below this = edge
-const PARTICLE_COUNT = 4500;  // max particles sampled from edges
+const PARTICLE_COUNT = 11000; // max particles sampled from edges
 const REPEL_RADIUS   = 100;   // mouse repulsion radius (px)
 const REPEL_FORCE    = 4.2;
 const SPRING         = 0.038;
@@ -19,13 +19,17 @@ const FLOAT = 1800;
 const IN    = 2800;
 const CYCLE = HOLD + OUT + FLOAT + IN;
 const SWEEP = 1400;   // left→right stagger across the face
-const PARALLAX = 22;  // max depth offset (px)
+const DEPTH = 150;    // face relief front-to-back (px)
+const FOV   = 700;    // perspective distance (px)
+const ROT_Y = 0.55;   // max head turn (rad)
+const ROT_X = 0.35;   // max head nod (rad)
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const logo = document.querySelector('.logotype');
 let particles  = [];
 let mouse      = { x: -999, y: -999, active: false };
 let raf        = null;
 let tilt       = { x: 0, y: 0 };
+let centre     = { x: 0, y: 0 };
 let energy     = 0;
 
 const smooth = u => { u = Math.min(1, Math.max(0, u)); return u * u * (3 - 2 * u); };
@@ -65,7 +69,7 @@ function buildFromImage(img) {
   const data = octx.getImageData(0, 0, off.width, off.height).data;
   // Collect all dark-pixel positions (edges of the face)
   const edgePixels = [];
-  const step = 2; // sample every N pixels for performance
+  const step = 1;
   for (let y = 0; y < off.height; y += step) {
     for (let x = 0; x < off.width; x += step) {
       const i = (y * off.width + x) * 4;
@@ -88,22 +92,26 @@ function buildFromImage(img) {
   const ox = (cW - drawW) / 2;
   const oy = (cH - drawH) / 2;
   particles = chosen.map(p => ({
+    g:  95 + Math.round(Math.random() * 75),
     hx: ox + p.nx * drawW,
     hy: oy + p.ny * drawH,
     x:  Math.random() * cW,
     y:  Math.random() * cH,
     vx: 0, vy: 0,
     phase: Math.random() * Math.PI * 2,
-    size:  0.8 + Math.random() * 1.4,
+    size:  0.5 + Math.random() * 0.7,
     sweep: p.nx,
   }));
-  // Pseudo-depth: face centre sits nearest the viewer, rim furthest back
+  for (const p of particles) p.tone = `rgb(${p.g},${p.g},${p.g})`;
+  // Depth: the face sits on a dome — centre nearest the viewer, rim furthest back
   const cx = particles.reduce((s, p) => s + p.hx, 0) / particles.length;
   const cy = particles.reduce((s, p) => s + p.hy, 0) / particles.length;
-  const rmax = Math.max(...particles.map(p => Math.hypot(p.hx - cx, p.hy - cy))) || 1;
+  centre = { x: cx, y: cy };
+  let rmax = 1;
+  for (const p of particles) rmax = Math.max(rmax, Math.hypot(p.hx - cx, p.hy - cy));
   for (const p of particles) {
-    const r = Math.hypot(p.hx - cx, p.hy - cy) / rmax;
-    p.z = Math.max(-1, Math.min(1, (1 - r) * 1.6 - 0.6 + (Math.random() - 0.5) * 0.3));
+    const r = Math.min(1, Math.hypot(p.hx - cx, p.hy - cy) / rmax);
+    p.z = Math.max(-1, Math.min(1, Math.sqrt(1 - r * r) * 1.6 - 0.6 + (Math.random() - 0.5) * 0.15));
   }
   particles.sort((a, b) => a.z - b.z);
   startLoop();
@@ -125,6 +133,10 @@ function draw(t) {
   const tgy = mouse.active ? Math.max(-1, Math.min(1, (mouse.y - H / 2) / (H / 2))) : Math.cos(t * 0.00023) * 0.25;
   tilt.x += (tgx - tilt.x) * 0.06;
   tilt.y += (tgy - tilt.y) * 0.06;
+
+  const ay = tilt.x * ROT_Y, ax = -tilt.y * ROT_X;
+  const sy = Math.sin(ay), cyR = Math.cos(ay);
+  const sx = Math.sin(ax), cxR = Math.cos(ax);
 
   let speedSum = 0;
   for (const p of particles) {
@@ -152,17 +164,25 @@ function draw(t) {
     p.x  += p.vx;
     p.y  += p.vy;
     speedSum += Math.abs(p.vx) + Math.abs(p.vy);
+    // Rotate the point about the face centre, then project with perspective
+    const X  = p.x - centre.x;
+    const Y  = p.y - centre.y;
+    const Z  = p.z * DEPTH;
+    const X1 = X * cyR + Z * sy;
+    const Z1 = Z * cyR - X * sy;
+    const Y2 = Y * cxR - Z1 * sx;
+    const Z2 = Z1 * cxR + Y * sx;
+    const f  = FOV / (FOV - Z2);
+    const near = Math.max(0, Math.min(1, (Z2 / DEPTH + 1) / 2));
     // Brightness varies with distance from home and depth
     const dist  = Math.sqrt(dx * dx + dy * dy);
-    const depth = (p.z + 1) / 2;
-    const alpha = Math.max(0.15, Math.min(0.9, 1 - dist / 120)) * (0.55 + 0.45 * depth);
-    ctx.beginPath();
-    ctx.arc(p.x + p.z * tilt.x * PARALLAX,
-            p.y + p.z * tilt.y * PARALLAX,
-            p.size * (0.75 + 0.5 * depth), 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
-    ctx.fill();
+    const alpha = Math.max(0.15, Math.min(0.9, 1 - dist / 120)) * (0.45 + 0.55 * near);
+    const s = p.size * f;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.tone;
+    ctx.fillRect(centre.x + X1 * f - s / 2, centre.y + Y2 * f - s / 2, s, s);
   }
+  ctx.globalAlpha = 1;
   ctx.restore();
 
   const avg = particles.length ? speedSum / particles.length : 0;
