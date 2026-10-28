@@ -19,10 +19,38 @@ const FLOAT = 1800;
 const IN    = 2800;
 const CYCLE = HOLD + OUT + FLOAT + IN;
 const SWEEP = 1400;   // left→right stagger across the face
-const DEPTH = 150;    // face relief front-to-back (px)
 const FOV   = 700;    // perspective distance (px)
-const ROT_Y = 0.55;   // max head turn (rad)
-const ROT_X = 0.35;   // max head nod (rad)
+const ROT_Y = 0.55;   // max head turn (rad) at turn = 1
+const ROT_X = 0.35;   // max head nod (rad) at turn = 1
+
+// ── Settings ──────────────────────────────────
+const DEFAULTS = {
+  colour: '#848484', variance: 60, temp: 0, bg: '#000000', accent: '#e8000d',
+  pace: 1, trails: 72, repel: 100, dissolve: true,
+  grain: 1, depth: 150, turn: 1, glitch: true,
+};
+const SCHEMA = [
+  { group: 'Colour' },
+  { k: 'colour',   label: 'Particles',     type: 'color' },
+  { k: 'variance', label: 'Tone variance', type: 'range', min: 0,    max: 100, step: 1 },
+  { k: 'temp',     label: 'Temperature',   type: 'range', min: -100, max: 100, step: 1,
+    fmt: v => v < 0 ? `${-v} cool` : v > 0 ? `${v} warm` : 'neutral' },
+  { k: 'bg',       label: 'Background',    type: 'color' },
+  { k: 'accent',   label: 'Accent',        type: 'color' },
+  { group: 'Motion' },
+  { k: 'pace',     label: 'Pace',          type: 'range', min: 0.2, max: 3, step: 0.05, fmt: v => v.toFixed(2) + '×' },
+  { k: 'trails',   label: 'Trails',        type: 'range', min: 0,   max: 95, step: 1 },
+  { k: 'repel',    label: 'Cursor reach',  type: 'range', min: 0,   max: 250, step: 5, fmt: v => v + 'px' },
+  { k: 'dissolve', label: 'Dissolve loop', type: 'toggle' },
+  { group: 'Form' },
+  { k: 'grain',    label: 'Grain size',    type: 'range', min: 0.4, max: 3, step: 0.1, fmt: v => v.toFixed(1) + '×' },
+  { k: 'depth',    label: '3D depth',      type: 'range', min: 0,   max: 300, step: 5, fmt: v => v + 'px' },
+  { k: 'turn',     label: 'Head turn',     type: 'range', min: 0,   max: 1.5, step: 0.05, fmt: v => Math.round(v * 100) + '%' },
+  { k: 'glitch',   label: 'Logo glitch',   type: 'toggle' },
+];
+const STORE_KEY = 'elw-settings';
+let cfg = { ...DEFAULTS };
+try { Object.assign(cfg, JSON.parse(localStorage.getItem(STORE_KEY)) || {}); } catch {}
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const logo = document.querySelector('.logotype');
 let particles  = [];
@@ -30,13 +58,14 @@ let mouse      = { x: -999, y: -999, active: false };
 let raf        = null;
 let tilt       = { x: 0, y: 0 };
 let centre     = { x: 0, y: 0 };
+let vt = 0, lastT = null;   // virtual clock, scaled by pace
 let energy     = 0;
 
 const smooth = u => { u = Math.min(1, Math.max(0, u)); return u * u * (3 - 2 * u); };
 
 function cohesionAt(ms) {
-  if (reduceMotion) return 1;
-  const m = ((ms % CYCLE) + CYCLE) % CYCLE;
+  if (reduceMotion || !cfg.dissolve) return 1;
+  const m =((ms % CYCLE) + CYCLE) % CYCLE;
   if (m < HOLD)               return 1;
   if (m < HOLD + OUT)         return 1 - smooth((m - HOLD) / OUT);
   if (m < HOLD + OUT + FLOAT) return 0;
@@ -47,7 +76,7 @@ function resize() {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   // Leave ~18% height for the logotype
-  const size = Math.min(vw * 0.92, vh * 0.78);
+  const size = Math.min(vw * 0.92, vh * 0.72);
   canvas.width  = Math.round(size * devicePixelRatio);
   canvas.height = Math.round(size * devicePixelRatio);
   canvas.style.width  = Math.round(size) + 'px';
@@ -92,7 +121,7 @@ function buildFromImage(img) {
   const ox = (cW - drawW) / 2;
   const oy = (cH - drawH) / 2;
   particles = chosen.map(p => ({
-    g:  95 + Math.round(Math.random() * 75),
+    d:  Math.random() * 2 - 1,
     hx: ox + p.nx * drawW,
     hy: oy + p.ny * drawH,
     x:  Math.random() * cW,
@@ -102,7 +131,7 @@ function buildFromImage(img) {
     size:  0.5 + Math.random() * 0.7,
     sweep: p.nx,
   }));
-  for (const p of particles) p.tone = `rgb(${p.g},${p.g},${p.g})`;
+  recolour();
   // Depth: the face sits on a dome — centre nearest the viewer, rim furthest back
   const cx = particles.reduce((s, p) => s + p.hx, 0) / particles.length;
   const cy = particles.reduce((s, p) => s + p.hy, 0) / particles.length;
@@ -124,9 +153,17 @@ function draw(t) {
   const H   = canvas.height / dpr;
   ctx.save();
   ctx.scale(dpr, dpr);
+  if (lastT === null) lastT = t;
+  vt += Math.min(100, t - lastT) * cfg.pace;
+  lastT = t;
+  t = vt;
+
   // Trail fade
-  ctx.fillStyle = 'rgba(0,0,0,0.28)';
+  // Fade toward transparent so the page background shows through unchanged
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.fillStyle = `rgba(0,0,0,${Math.max(0.04, 1 - cfg.trails / 100)})`;
   ctx.fillRect(0, 0, W, H);
+  ctx.globalCompositeOperation = 'source-over';
 
   // Tilt follows the mouse; idles in a slow sway when there is none
   const tgx = mouse.active ? Math.max(-1, Math.min(1, (mouse.x - W / 2) / (W / 2))) : Math.sin(t * 0.00031) * 0.35;
@@ -134,7 +171,9 @@ function draw(t) {
   tilt.x += (tgx - tilt.x) * 0.06;
   tilt.y += (tgy - tilt.y) * 0.06;
 
-  const ay = tilt.x * ROT_Y, ax = -tilt.y * ROT_X;
+  const ay = tilt.x * ROT_Y * cfg.turn, ax = -tilt.y * ROT_X * cfg.turn;
+  const DEPTH = cfg.depth || 1;
+  const REPEL_RADIUS = cfg.repel;
   const sy = Math.sin(ay), cyR = Math.cos(ay);
   const sx = Math.sin(ax), cxR = Math.cos(ax);
 
@@ -167,7 +206,7 @@ function draw(t) {
     // Rotate the point about the face centre, then project with perspective
     const X  = p.x - centre.x;
     const Y  = p.y - centre.y;
-    const Z  = p.z * DEPTH;
+    const Z  = p.z * cfg.depth;
     const X1 = X * cyR + Z * sy;
     const Z1 = Z * cyR - X * sy;
     const Y2 = Y * cxR - Z1 * sx;
@@ -177,7 +216,7 @@ function draw(t) {
     // Brightness varies with distance from home and depth
     const dist  = Math.sqrt(dx * dx + dy * dy);
     const alpha = Math.max(0.15, Math.min(0.9, 1 - dist / 120)) * (0.45 + 0.55 * near);
-    const s = p.size * f;
+    const s = p.size * cfg.grain * f;
     ctx.globalAlpha = alpha;
     ctx.fillStyle = p.tone;
     ctx.fillRect(centre.x + X1 * f - s / 2, centre.y + Y2 * f - s / 2, s, s);
@@ -194,12 +233,12 @@ function draw(t) {
 function updateLogo(t, c) {
   if (!logo) return;
   let jx = 0, shadow = 'none';
-  if (!reduceMotion) {
-    const g = Math.min(1, energy * 1.2 + (c > 0.02 && c < 0.98 ? 0.35 : 0));
+  if (!reduceMotion && cfg.glitch) {
+    const g =Math.min(1, energy * 1.2 + (c > 0.02 && c < 0.98 ? 0.35 : 0));
     if (Math.random() < g * 0.45) {
       jx = (Math.random() - 0.5) * 12 * g;
       const s = (2 + Math.random() * 4) * g;
-      shadow = `${-s}px 0 rgba(255,255,255,0.55), ${s}px 0 rgba(232,0,13,0.75)`;
+      shadow = `${-s}px 0 rgba(255,255,255,0.55), ${s}px 0 ${cfg.accent}`;
     }
   }
   const pulse = 1 + 0.012 * Math.sin(t * 0.0011) * c + 0.05 * energy;
@@ -219,8 +258,101 @@ function loadFace() {
   img.onload = () => buildFromImage(img);
   img.src = FACE_DATA;
 }
+// ── Settings panel ────────────────────────────
+const hexRGB = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const clamp255 = v => Math.max(0, Math.min(255, Math.round(v)));
+
+function recolour() {
+  const [r, g, b] = hexRGB(cfg.colour);
+  const warm = cfg.temp / 100;
+  const spread = cfg.variance / 100 * 60;
+  for (const p of particles) {
+    const l = p.d * spread;
+    p.tone = `rgb(${clamp255(r + l + warm * 45)},${clamp255(g + l + warm * 8)},${clamp255(b + l - warm * 45)})`;
+  }
+}
+
+function applySettings() {
+  document.documentElement.style.setProperty('--bg', cfg.bg);
+  document.documentElement.style.setProperty('--accent', cfg.accent);
+  recolour();
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(cfg)); } catch {}
+}
+
+function buildPanel() {
+  const cog   = document.getElementById('cog');
+  const panel = document.getElementById('settings');
+  const form  = panel.querySelector('form');
+  const inputs = {};
+
+  for (const row of SCHEMA) {
+    if (row.group) {
+      const h = document.createElement('h3');
+      h.textContent = row.group;
+      form.appendChild(h);
+      continue;
+    }
+    const label = document.createElement('label');
+    label.className = `row row-${row.type}`;
+    const name = document.createElement('span');
+    name.textContent = row.label;
+    const input = document.createElement('input');
+    input.name = row.k;
+    label.append(name);
+    if (row.type === 'range') {
+      Object.assign(input, { type: 'range', min: row.min, max: row.max, step: row.step });
+      const out = document.createElement('output');
+      label.append(out, input);
+      input.addEventListener('input', () => {
+        cfg[row.k] = parseFloat(input.value);
+        out.textContent = row.fmt ? row.fmt(cfg[row.k]) : cfg[row.k];
+        applySettings();
+      });
+    } else if (row.type === 'color') {
+      input.type = 'color';
+      label.append(input);
+      input.addEventListener('input', () => { cfg[row.k] = input.value; applySettings(); });
+    } else {
+      input.type = 'checkbox';
+      label.append(input);
+      input.addEventListener('change', () => { cfg[row.k] = input.checked; applySettings(); });
+    }
+    inputs[row.k] = { input, row };
+    form.appendChild(label);
+  }
+
+  const sync = () => {
+    for (const { input, row } of Object.values(inputs)) {
+      if (row.type === 'toggle') input.checked = cfg[row.k];
+      else input.value = cfg[row.k];
+      if (row.type === 'range') {
+        input.previousElementSibling.textContent = row.fmt ? row.fmt(cfg[row.k]) : cfg[row.k];
+      }
+    }
+  };
+  sync();
+
+  const setOpen = open => {
+    panel.hidden = !open;
+    cog.setAttribute('aria-expanded', open);
+  };
+  cog.addEventListener('click', () => setOpen(panel.hidden));
+  panel.querySelector('.close').addEventListener('click', () => { setOpen(false); cog.focus(); });
+  panel.querySelector('.reset').addEventListener('click', () => {
+    cfg = { ...DEFAULTS };
+    sync();
+    applySettings();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !panel.hidden) { setOpen(false); cog.focus(); }
+  });
+}
+
+const inUI = e => e.target.closest && e.target.closest('#settings, #cog');
+
 // ── Events ────────────────────────────────────
 window.addEventListener('mousemove', e => {
+  if (inUI(e)) { mouse.x = -999; mouse.y = -999; mouse.active = false; return; }
   // Convert page coords to canvas logical coords
   const rect = canvas.getBoundingClientRect();
   mouse.x = e.clientX - rect.left;
@@ -234,6 +366,7 @@ window.addEventListener('touchend', () => {
   mouse.x = -999; mouse.y = -999; mouse.active = false;
 });
 window.addEventListener('touchmove', e => {
+  if (inUI(e)) return;
   const rect = canvas.getBoundingClientRect();
   const t    = e.touches[0];
   mouse.x = t.clientX - rect.left;
@@ -245,5 +378,7 @@ window.addEventListener('resize', () => {
   loadFace();
 });
 // ── Boot ──────────────────────────────────────
-resize()
+buildPanel();
+applySettings();
+resize();
 loadFace();

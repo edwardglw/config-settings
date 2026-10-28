@@ -9,11 +9,22 @@
 </head>
 <body>
   <div class="wrapper">
+    <button id="cog" class="cog" type="button" aria-label="Settings" aria-expanded="false" aria-controls="settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
     <h1 class="logotype" aria-label="EL-W">
       <span class="red">E</span><span class="white">L</span><span class="red hyphen">-</span><span class="white">W</span>
     </h1>
     <canvas id="canvas"></canvas>
   </div>
+  <aside id="settings" class="panel" aria-label="Settings" hidden>
+    <header>
+      <h2>Settings</h2>
+      <button class="close" type="button" aria-label="Close settings">&times;</button>
+    </header>
+    <form onsubmit="return false"></form>
+    <button class="reset" type="button">Reset to defaults</button>
+  </aside>
   <script src="sketch.js"></script>
 </body>
 </html>
